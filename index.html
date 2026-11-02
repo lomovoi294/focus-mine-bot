@@ -62,9 +62,13 @@
             }
         });
 
+        // Логика кнопки "Забрать"
         claimBtn.addEventListener('click', () => {
             if (seconds > 0) {
+                // Отправляем данные боту
                 tg.sendData(JSON.stringify({ action: "claim", seconds: seconds.toFixed(1) }));
+                // Закрываем окно через полсекунды, чтобы данные успели уйти
+                setTimeout(() => { tg.close(); }, 500);
             }
         });
 
