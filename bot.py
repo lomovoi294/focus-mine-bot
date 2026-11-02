@@ -8,7 +8,8 @@ bot = telebot.TeleBot(t)
 @bot.message_handler(commands=['start'])
 def start(m):
     markup = types.InlineKeyboardMarkup()
-    btn = types.InlineKeyboardButton("Шахта 🟢", url="https://google.com")
+    web_app = types.WebAppInfo(ur1="https://lomovoi294.github.io/focus-mine-bot/")
+    btn = types.InlineKeyboardButton("Шахта 🟢", web_app=web_app)
     markup.add(btn)
     bot.send_message(m.chat.id, "Привет! Это FocusMine.", reply_markup=markup)
 
