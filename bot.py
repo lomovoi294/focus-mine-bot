@@ -32,7 +32,20 @@ app = Flask(__name__)
 @app.route('/')
 def health():
     return "Bot is running"
-
+@bot.message_handler(content_types=['web_app_data'])
+def web_app(web_app_message):
+    import json
+    try:
+        data = json.loads(web_app_message.web_app_data.data)
+        if data.get("action") == "claim":
+            seconds = float(data.get("seconds", 0))
+            points = int(seconds)
+            bot.send_message(
+                web_app_message.chat.id, 
+                f"✅ Успешно! Ты намайнил {points} SFP."
+            )
+    except Exception as e:
+        bot.send_message(web_app_message.chat.id, "Ошибка при обработке данных.")
 if __name__ == '__main__':
     threading.Thread(target=run_bot).start()
     port = int(os.environ.get('PORT', 10000))
