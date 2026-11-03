@@ -2,10 +2,12 @@ import telebot
 import os
 from telebot import types
 from flask import Flask, request
+from flask_cors import CORS
 
 t = os.environ.get('BOT_TOKEN')
 bot = telebot.TeleBot(t)
 app = Flask(__name__)
+CORS(app)
 
 @bot.message_handler(commands=['start'])
 def start(m):
