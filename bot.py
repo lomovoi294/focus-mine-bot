@@ -4,12 +4,10 @@ from telebot import types
 from flask import Flask, request
 import json
 
-# --- Настройки ---
 t = os.environ.get('BOT_TOKEN')
 bot = telebot.TeleBot(t)
 app = Flask(name)
 
-# --- Твои команды ---
 @bot.message_handler(commands=['start'])
 def start(m):
     markup = types.InlineKeyboardMarkup()
@@ -24,7 +22,6 @@ def invite(m):
     link = f"https://t.me/{u}?start={m.from_user.id}"
     bot.send_message(m.chat.id, f"Твоя ссылка: {link}")
 
-# --- Прием данных от Mini App ---
 @bot.message_handler(content_types=['web_app_data'])
 def web_app(web_app_message):
     try:
@@ -39,7 +36,6 @@ def web_app(web_app_message):
     except Exception as e:
         print(f"Ошибка: {e}")
 
-# --- Webhook для Render ---
 @app.route('/' + t, methods=['POST'])
 def getMessage():
     json_string = request.get_data().decode('utf-8')
@@ -50,7 +46,6 @@ def getMessage():
 @app.route("/")
 def webhook():
     bot.remove_webhook()
-    # Устанавливаем вебхук на твой адрес Render
     bot.set_webhook(url=f'https://focus-mine-bot.onrender.com/{t}')
     return "Webhook установлен!", 200
 
