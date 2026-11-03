@@ -59,14 +59,36 @@
         };
 
         claimBtn.onclick = function() {
-            if (seconds > 0) {
-                const chatId = tg.initDataUnsafe.user.id;
-                const url = 'https://focus-mine-bot.onrender.com/claim?user_id=' + chatId + '&seconds=' + seconds.toFixed(1);
-                
-                tg.close();
-                fetch(url);
+    if (seconds > 0) {
+        claimBtn.disabled = true;
+        claimBtn.innerText = "Отправка...";
+        
+        try {
+            const chatId = tg.initDataUnsafe.user.id;
+            // Если chatId нет, покажем ошибку (для отладки)
+            if (!chatId) {
+                alert("Ошибка: Telegram не передал ваш ID. Попробуйте перезапустить бота.");
+                claimBtn.disabled = false;
+                claimBtn.innerText = "Забрать SFP";
+                return;
             }
-        };
+
+            const url = 'https://focus-mine-bot.onrender.com/claim?user_id=' + chatId + '&seconds=' + seconds.toFixed(1);
+            
+            // keepalive: true не дает браузеру отменить запрос при закрытии
+            fetch(url, { keepalive: true }).then(() => {
+                tg.close(); 
+            }).catch((e) => {
+                alert("Ошибка сети: " + e);
+                claimBtn.disabled = false;
+                claimBtn.innerText = "Забрать SFP";
+            });
+        } catch (e) {
+            alert("Ошибка: " + e.message);
+            claimBtn.disabled = false;
+        }
+    }
+};
 
         document.addEventListener("visibilitychange", () => {
             if (document.hidden && isMining) {
