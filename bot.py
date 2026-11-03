@@ -1,13 +1,15 @@
 import telebot
 import os
 from telebot import types
-from flask import Flask
-import threading
+from flask import Flask, request
+import json
 
-# --- Настройка бота ---
+# --- Настройки ---
 t = os.environ.get('BOT_TOKEN')
 bot = telebot.TeleBot(t)
+app = Flask(name)
 
+# --- Твои команды ---
 @bot.message_handler(commands=['start'])
 def start(m):
     markup = types.InlineKeyboardMarkup()
@@ -22,19 +24,9 @@ def invite(m):
     link = f"https://t.me/{u}?start={m.from_user.id}"
     bot.send_message(m.chat.id, f"Твоя ссылка: {link}")
 
-# --- Запуск бота в фоне ---
-def run_bot():
-    bot.infinity_polling()
-
-# --- Мини-сервер для Render ---
-app = Flask(__name__)
-
-@app.route('/')
-def health():
-    return "Bot is running"
+# --- Прием данных от Mini App ---
 @bot.message_handler(content_types=['web_app_data'])
 def web_app(web_app_message):
-    import json
     try:
         data = json.loads(web_app_message.web_app_data.data)
         if data.get("action") == "claim":
@@ -45,8 +37,22 @@ def web_app(web_app_message):
                 f"✅ Успешно! Ты намайнил {points} SFP."
             )
     except Exception as e:
-        bot.send_message(web_app_message.chat.id, "Ошибка при обработке данных.")
-if __name__ == '__main__':
-    threading.Thread(target=run_bot).start()
-    port = int(os.environ.get('PORT', 10000))
-    app.run(host='0.0.0.0', port=port)
+        print(f"Ошибка: {e}")
+
+# --- Webhook для Render ---
+@app.route('/' + t, methods=['POST'])
+def getMessage():
+    json_string = request.get_data().decode('utf-8')
+    update = telebot.types.Update.de_json(json_string)
+    bot.process_new_updates([update])
+    return "!", 200
+
+@app.route("/")
+def webhook():
+    bot.remove_webhook()
+    # Устанавливаем вебхук на твой адрес Render
+    bot.set_webhook(url=f'https://focus-mine-bot.onrender.com/{t}')
+    return "Webhook установлен!", 200
+
+if name == "main":
+    app.run(host="0.0.0.0", port=int(os.environ.get('PORT', 5000)))
