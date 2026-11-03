@@ -7,7 +7,7 @@ from flask_cors import CORS
 t = os.environ.get('BOT_TOKEN')
 bot = telebot.TeleBot(t)
 app = Flask(__name__)
-CORS(app)
+CORS(app) # Разрешаем запросы с других сайтов
 
 @bot.message_handler(commands=['start'])
 def start(m):
@@ -23,7 +23,6 @@ def invite(m):
     link = f"https://t.me/{u}?start={m.from_user.id}"
     bot.send_message(m.chat.id, f"Твоя ссылка: {link}")
 
-# Новый маршрут для приема данных от сайта
 @app.route('/claim')
 def claim():
     user_id = request.args.get('user_id')
@@ -33,10 +32,9 @@ def claim():
         try:
             bot.send_message(user_id, f"✅ Успешно! Ты намайнил {points} SFP.")
         except Exception as e:
-            print(f"Ошибка отправки сообщения: {e}")
+            print(f"Ошибка: {e}")
     return "OK", 200
 
-# Webhook для работы команд самого бота (/start, /invite)
 @app.route('/' + t, methods=['POST'])
 def getMessage():
     json_string = request.get_data().decode('utf-8')
