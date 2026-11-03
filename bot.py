@@ -13,7 +13,7 @@ turso_token = os.environ.get('TURSO_TOKEN')
 admin_id = int(os.environ.get('ADMIN_ID', 0))
 
 bot = telebot.TeleBot(t, threaded=False)
-app = Flask(name)
+app = Flask(__name__)
 CORS(app)
 
 def get_conn():
