@@ -10,7 +10,7 @@ turso_url = os.environ.get('TURSO_URL')
 turso_token = os.environ.get('TURSO_TOKEN')
 
 bot = telebot.TeleBot(t, threaded=False)
-app = Flask(name)
+app = Flask(__name__)
 CORS(app)
 
 def get_conn():
