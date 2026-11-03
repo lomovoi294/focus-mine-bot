@@ -7,19 +7,9 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         body { margin: 0; padding: 0; background: #0d1117; color: white; font-family: Arial; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
-        
-        .circle { 
-            width: 200px; height: 200px; border-radius: 50%; 
-            background: radial-gradient(circle, #007bff 0%, #001a33 100%); 
-            box-shadow: 0 0 30px #007bff; margin-bottom: 20px;
-            transition: all 0.3s ease-in-out;
-        }
+        .circle { width: 200px; height: 200px; border-radius: 50%; background: radial-gradient(circle, #007bff 0%, #001a33 100%); box-shadow: 0 0 30px #007bff; margin-bottom: 20px; transition: all 0.3s ease-in-out; }
         .pulsing { animation: pulse 2s infinite alternate; }
-        @keyframes pulse { 
-            0% { transform: scale(1); box-shadow: 0 0 20px #007bff, 0 0 40px #007bff; } 
-            100% { transform: scale(1.1); box-shadow: 0 0 40px #007bff, 0 0 80px #007bff; } 
-        }
-
+        @keyframes pulse { 0% { transform: scale(1); box-shadow: 0 0 20px #007bff, 0 0 40px #007bff; } 100% { transform: scale(1.1); box-shadow: 0 0 40px #007bff, 0 0 80px #007bff; } }
         .timer { font-size: 40px; font-weight: bold; margin-bottom: 20px; }
         .btn { padding: 15px 30px; font-size: 18px; color: white; background: #238636; border: none; border-radius: 10px; margin-top: 10px; cursor: pointer; display: none; }
     </style>
@@ -46,7 +36,6 @@
             if (isMining) return;
             isMining = true;
             seconds = 0;
-            
             this.style.display = 'none';
             claimBtn.style.display = 'none';
             circle.classList.add('pulsing');
@@ -59,36 +48,21 @@
         };
 
         claimBtn.onclick = function() {
-    if (seconds > 0) {
-        claimBtn.disabled = true;
-        claimBtn.innerText = "Отправка...";
-        
-        try {
-            const chatId = tg.initDataUnsafe.user.id;
-            // Если chatId нет, покажем ошибку (для отладки)
-            if (!chatId) {
-                alert("Ошибка: Telegram не передал ваш ID. Попробуйте перезапустить бота.");
-                claimBtn.disabled = false;
-                claimBtn.innerText = "Забрать SFP";
-                return;
+            if (seconds > 0) {
+                claimBtn.disabled = true;
+                claimBtn.innerText = "Отправка...";
+                
+                try {
+                    // Отправляем данные через Telegram API
+                    tg.sendData(JSON.stringify({ seconds: seconds.toFixed(1) }));
+                    // Окно закроется автоматически силами Telegram
+                } catch (e) {
+                    alert("Ошибка: " + e);
+                    claimBtn.disabled = false;
+                    claimBtn.innerText = "Забрать SFP";
+                }
             }
-
-            const url = 'https://focus-mine-bot.onrender.com/claim?user_id=' + chatId + '&seconds=' + seconds.toFixed(1);
-            
-            // keepalive: true не дает браузеру отменить запрос при закрытии
-            fetch(url, { keepalive: true }).then(() => {
-                tg.close(); 
-            }).catch((e) => {
-                alert("Ошибка сети: " + e);
-                claimBtn.disabled = false;
-                claimBtn.innerText = "Забрать SFP";
-            });
-        } catch (e) {
-            alert("Ошибка: " + e.message);
-            claimBtn.disabled = false;
-        }
-    }
-};
+        };
 
         document.addEventListener("visibilitychange", () => {
             if (document.hidden && isMining) {
