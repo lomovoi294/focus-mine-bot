@@ -136,7 +136,7 @@ def webhook():
     bot.set_webhook(url=f'https://focus-mine-bot.onrender.com/{t}')
     return "Webhook установлен!", 200
 
-app.run(host="0.0.0.0", port=int(os.environ.get('PORT', 5000)))d, points)
+app.run(host="0.0.0.0", port=int(os.environ.get('PORT', 5000)))
                 new_balance = get_balance(user_id)
                 bot.send_message(user_id, f"✅ Успешно! Ты намайнил {points} SFP.\nТвой новый баланс: {new_balance:.1f} SFP")
             else:
