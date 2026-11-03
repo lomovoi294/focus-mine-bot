@@ -20,7 +20,7 @@ def init_db():
     conn.commit()
     conn.close()
 
-init_db()
+# init_db()
 
 def add_user(user_id, referrer_id=None):
     conn = sqlite3.connect('database.db')
