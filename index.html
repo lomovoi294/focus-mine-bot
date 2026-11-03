@@ -1,117 +1,82 @@
-import telebot
-import os
-from telebot import types
-from flask import Flask, request
-from flask_cors import CORS
-import libsql
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Focus Mine</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body { margin: 0; padding: 0; background: #0d1117; color: white; font-family: Arial; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
+        
+        .circle { 
+            width: 200px; height: 200px; border-radius: 50%; 
+            background: radial-gradient(circle, #007bff 0%, #001a33 100%); 
+            box-shadow: 0 0 30px #007bff; margin-bottom: 20px;
+            transition: all 0.3s ease-in-out;
+        }
+        .pulsing { animation: pulse 2s infinite alternate; }
+        @keyframes pulse { 
+            0% { transform: scale(1); box-shadow: 0 0 20px #007bff, 0 0 40px #007bff; } 
+            100% { transform: scale(1.1); box-shadow: 0 0 40px #007bff, 0 0 80px #007bff; } 
+        }
 
-# --- Настройки ---
-t = os.environ.get('BOT_TOKEN')
-turso_url = os.environ.get('TURSO_URL')
-turso_token = os.environ.get('TURSO_TOKEN')
+        .timer { font-size: 40px; font-weight: bold; margin-bottom: 20px; }
+        .btn { padding: 15px 30px; font-size: 18px; color: white; background: #238636; border: none; border-radius: 10px; margin-top: 10px; cursor: pointer; display: none; }
+    </style>
+</head>
+<body>
+    <div class="circle" id="circle"></div>
+    <div class="timer" id="timer">0.0s</div>
+    <button class="btn" id="startBtn" style="display: block; background: #007bff;">Начать фокус</button>
+    <button class="btn" id="claimBtn">Забрать SFP</button>
 
-bot = telebot.TeleBot(t, threaded=False)
-app = Flask(name)
-CORS(app)
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+        let isMining = false;
+        let seconds = 0;
+        let timerInterval;
 
-# --- База данных (Turso) ---
-def get_conn():
-    return libsql.connect(turso_url, auth_token=turso_token)
+        const circle = document.getElementById('circle');
+        const timerDisplay = document.getElementById('timer');
+        const startBtn = document.getElementById('startBtn');
+        const claimBtn = document.getElementById('claimBtn');
 
-def init_db():
-    conn = get_conn()
-    conn.execute("CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY, balance REAL, referrer_id INTEGER)")
-    conn.commit()
-    conn.close()
-
-def add_user(user_id, referrer_id=None):
-    conn = get_conn()
-    cursor = conn.execute("SELECT * FROM users WHERE user_id = ?", [user_id])
-    if not cursor.fetchone():
-        conn.execute("INSERT INTO users (user_id, balance, referrer_id) VALUES (?, ?, ?)", [user_id, 0, referrer_id])
-        conn.commit()
-    conn.close()
-
-def update_balance(user_id, points):
-    conn = get_conn()
-    conn.execute("UPDATE users SET balance = balance + ? WHERE user_id = ?", [points, user_id])
-    conn.commit()
-    conn.close()
-
-def get_balance(user_id):
-    conn = get_conn()
-    cursor = conn.execute("SELECT balance FROM users WHERE user_id = ?", [user_id])
-    row = cursor.fetchone()
-    conn.close()
-    return row[0] if row else 0
-
-init_db()
-
-# --- Команды бота ---
-@bot.message_handler(commands=['start'])
-def start(m):
-    args = m.text.split()
-    referrer_id = None
-    if len(args) > 1:
-        try:
-            referrer_id = int(args[1])
-            if referrer_id == m.from_user.id:
-                referrer_id = None
-        except ValueError:
-            pass
-
-    add_user(m.from_user.id, referrer_id)
-    
-    markup = types.InlineKeyboardMarkup()
-    web_app = types.WebAppInfo(url="https://lomovoi294.github.io/focus-mine-bot/")
-    btn = types.InlineKeyboardButton("Шахта 🟢", web_app=web_app)
-    markup.add(btn)
-    
-    balance = get_balance(m.from_user.id)
-    bot.send_message(m.chat.id, f"Привет! Это FocusMine.\nТвой баланс: {balance:.1f} SFP", reply_markup=markup)
-
-@bot.message_handler(commands=['invite'])
-def invite(m):
-    u = bot.get_me().username
-    link = f"https://t.me/{u}?start={m.from_user.id}"
-    bot.send_message(m.chat.id, f"Твоя ссылка: {link}")
-
-# --- Прием данных от сайта ---
-@app.route('/claim')
-def claim():
-    user_id = request.args.get('user_id')
-    seconds = request.args.get('seconds')
-    
-    if user_id and seconds:
-        try:
-            user_id = int(user_id)
-            points = int(float(seconds))
+        startBtn.onclick = function() {
+            if (isMining) return;
+            isMining = true;
+            seconds = 0;
             
-            # АНТИЧИТ: максимум 60 секунд за один раз
-            if points > 0 and points <= 60:
-                update_balance(user_id, points)
-                new_balance = get_balance(user_id)
-                bot.send_message(user_id, f"✅ Успешно! Ты намайнил {points} SFP.\nТвой новый баланс: {new_balance:.1f} SFP")
-            else:
-                print(f"⚠️ Попытка накрутки от {user_id}: {points} секунд")
+            this.style.display = 'none';
+            claimBtn.style.display = 'none';
+            circle.classList.add('pulsing');
+            
+            timerInterval = setInterval(() => {
+                seconds += 0.1;
+                timerDisplay.innerText = seconds.toFixed(1) + 's';
+                if (seconds > 5) claimBtn.style.display = 'block';
+            }, 100);
+        };
+
+        claimBtn.onclick = function() {
+            if (seconds > 0) {
+                const chatId = tg.initDataUnsafe.user.id;
+                const url = 'https://focus-mine-bot.onrender.com/claim?user_id=' + chatId + '&seconds=' + seconds.toFixed(1);
                 
-        except Exception as e:
-            print(f"Ошибка начисления: {e}")
-            
-    return "OK", 200
+                tg.close();
+                fetch(url);
+            }
+        };
 
-# --- Webhook ---
-@app.route('/' + t, methods=['POST'])
-def getMessage():
-    json_string = request.get_data().decode('utf-8')
-    update = telebot.types.Update.de_json(json_string)
-    bot.process_new_updates([update])
-    return "!", 200
-
-@app.route("/")
-def webhook():
-    bot.remove_webhook()
-    bot.set_webhook(url=f'https://focus-mine-bot.onrender.com/{t}')
-    return "Webhook установлен!", 200
-
-app.run(host="0.0.0.0", port=int(os.environ.get('PORT', 5000)))
+        document.addEventListener("visibilitychange", () => {
+            if (document.hidden && isMining) {
+                clearInterval(timerInterval);
+                isMining = false;
+                circle.classList.remove('pulsing');
+                startBtn.style.display = 'block';
+                startBtn.innerText = "Попробовать снова";
+            }
+        });
+    </script>
+</body>
+</html>
