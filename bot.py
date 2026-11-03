@@ -1,5 +1,6 @@
 import telebot
 import os
+import time
 from telebot import types
 from flask import Flask, request
 from flask_cors import CORS
@@ -18,11 +19,17 @@ def get_conn():
 
 def init_db():
     conn = get_conn()
-    conn.execute("CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY, balance REAL, referrer_id INTEGER, is_banned INTEGER DEFAULT 0)")
+    # Создаем таблицу со всеми нужными колонками
+    conn.execute("CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY, balance REAL, referrer_id INTEGER, is_banned INTEGER DEFAULT 0, last_daily INTEGER DEFAULT 0)")
+    
+    # Добавляем новые колонки, если база была создана раньше (игнорируем ошибки, если они уже есть)
     try:
         conn.execute("ALTER TABLE users ADD COLUMN is_banned INTEGER DEFAULT 0")
-    except:
-        pass
+    except: pass
+    try:
+        conn.execute("ALTER TABLE users ADD COLUMN last_daily INTEGER DEFAULT 0")
+    except: pass
+    
     conn.commit()
     conn.close()
 
@@ -43,7 +50,7 @@ def add_user(user_id, referrer_id=None):
     conn = get_conn()
     cursor = conn.execute("SELECT * FROM users WHERE user_id = ?", [user_id])
     if not cursor.fetchone():
-        conn.execute("INSERT INTO users (user_id, balance, referrer_id, is_banned) VALUES (?, ?, ?, 0)", [user_id, 0, referrer_id])
+        conn.execute("INSERT INTO users (user_id, balance, referrer_id, is_banned, last_daily) VALUES (?, ?, ?, 0, 0)", [user_id, 0, referrer_id])
         conn.commit()
     conn.close()
 
@@ -60,8 +67,23 @@ def get_balance(user_id):
     conn.close()
     return row[0] if row else 0
 
+# --- Функции для Ежедневного бонуса ---
+def get_last_daily(user_id):
+    conn = get_conn()
+    cursor = conn.execute("SELECT last_daily FROM users WHERE user_id = ?", [user_id])
+    row = cursor.fetchone()
+    conn.close()
+    return row[0] if row else 0
+
+def set_last_daily(user_id, timestamp):
+    conn = get_conn()
+    conn.execute("UPDATE users SET last_daily = ? WHERE user_id = ?", [timestamp, user_id])
+    conn.commit()
+    conn.close()
+
 init_db()
 
+# --- Меню и кнопки ---
 @bot.message_handler(commands=['start'])
 def start(m):
     if is_user_banned(m.from_user.id):
@@ -80,8 +102,11 @@ def start(m):
     
     markup = types.InlineKeyboardMarkup()
     web_app = types.WebAppInfo(url="https://lomovoi294.github.io/focus-mine-bot/")
-    btn = types.InlineKeyboardButton("Шахта 🟢", web_app=web_app)
-    markup.add(btn)
+    btn_mine = types.InlineKeyboardButton("Шахта 🟢", web_app=web_app)
+    btn_daily = types.InlineKeyboardButton("🎁 Ежедневный бонус", callback_data="daily_reward")
+    
+    markup.add(btn_mine)
+    markup.add(btn_daily) # Добавляем кнопку бонуса вниз
     
     balance = get_balance(m.from_user.id)
     bot.send_message(m.chat.id, f"Привет! Это FocusMine.\nТвой баланс: {balance:.1f} SFP", reply_markup=markup)
@@ -92,7 +117,33 @@ def invite(m):
     u = bot.get_me().username
     link = f"https://t.me/{u}?start={m.from_user.id}"
     bot.send_message(m.chat.id, f"Твоя ссылка: {link}")
+   # --- Обработка нажатия на кнопку "Бонус" ---
+@bot.callback_query_handler(func=lambda call: call.data == "daily_reward")
+def callback_daily(call):
+    user_id = call.from_user.id
+    
+    if is_user_banned(user_id):
+        bot.answer_callback_query(call.id, "⛔ Доступ закрыт.")
+        return
 
+    now = int(time.time())
+    last_claim = get_last_daily(user_id)
+    
+    # 86400 секунд = 24 часа
+    if now - last_claim >= 86400:
+        reward = 50 # Размер бонуса
+        update_balance(user_id, reward)
+        set_last_daily(user_id, now)
+        
+        bot.answer_callback_query(call.id, f"🎁 Ты получил {reward} SFP!")
+        bot.send_message(call.message.chat.id, f"✅ Отлично! Ежедневный бонус получен.\nТвой баланс: {get_balance(user_id):.1f} SFP")
+    else:
+        remaining = 86400 - (now - last_claim)
+        hours = remaining // 3600
+        minutes = (remaining % 3600) // 60
+        bot.answer_callback_query(call.id, f"⏳ Ты уже забирал бонус.\nЖди еще {hours} ч. {minutes} мин.", show_alert=True)
+
+# --- Прием данных от сайта ---
 @app.route('/claim')
 def claim():
     user_id = request.args.get('user_id')
@@ -115,13 +166,14 @@ def claim():
                 print(f"🚫 Пользователь {user_id} забанен за накрутку ({points} сек).")
                 try:
                     bot.send_message(user_id, "⛔ Ты заблокирован за попытку взлома системы.")
-                except:
-                    pass
+                except: pass
                 
         except Exception as e:
             print(f"Ошибка: {e}")
             
     return "OK", 200
+
+# --- Webhook ---
 @app.route('/' + t, methods=['POST'])
 def getMessage():
     json_string = request.get_data().decode('utf-8')
@@ -135,4 +187,4 @@ def webhook():
     bot.set_webhook(url=f'https://focus-mine-bot.onrender.com/{t}')
     return "Webhook установлен!", 200
 
-app.run(host="0.0.0.0", port=int(os.environ.get('PORT', 5000)))
+app.run(host="0.0.0.0", port=int(os.environ.get('PORT', 5000))) 
