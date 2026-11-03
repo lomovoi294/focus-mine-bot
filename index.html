@@ -6,79 +6,60 @@
     <title>Focus Mine</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        body { margin: 0; padding: 0; background-color: #0d1117; color: white; font-family: Arial, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
-        .circle-container { position: relative; width: 250px; height: 250px; display: flex; align-items: center; justify-content: center; }
-        .circle { width: 100%; height: 100%; border-radius: 50%; background: radial-gradient(circle, #007bff 0%, #001a33 100%); box-shadow: 0 0 20px #007bff, 0 0 40px #007bff; transition: all 1s ease-in-out; }
-        .pulsing { animation: pulse 2s infinite alternate; }
-        @keyframes pulse { 0% { transform: scale(1); box-shadow: 0 0 20px #007bff, 0 0 40px #007bff; } 100% { transform: scale(1.1); box-shadow: 0 0 40px #007bff, 0 0 80px #007bff; } }
-        .timer { position: absolute; font-size: 40px; font-weight: bold; text-shadow: 0 0 10px rgba(255,255,255,0.5); }
-        .status { margin-top: 30px; font-size: 18px; color: #8b949e; text-align: center; padding: 0 20px; }
-        .btn { margin-top: 20px; padding: 15px 30px; font-size: 18px; color: white; background-color: #238636; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; display: none; }
-        .btn-claim { background-color: #007bff; }
+        body { margin: 0; padding: 0; background: #0d1117; color: white; font-family: Arial; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }
+        .circle { width: 200px; height: 200px; border-radius: 50%; background: radial-gradient(circle, #007bff 0%, #001a33 100%); box-shadow: 0 0 30px #007bff; margin-bottom: 20px; }
+        .timer { font-size: 40px; font-weight: bold; }
+        .btn { padding: 15px 30px; font-size: 18px; color: white; background: #238636; border: none; border-radius: 10px; margin-top: 20px; display: none; cursor: pointer; }
     </style>
 </head>
 <body>
-    <div class="circle-container">
-        <div id="circle" class="circle"></div>
-        <div id="timer" class="timer">0.0s</div>
-    </div>
-    <div class="status" id="status">Нажми, чтобы начать майнинг</div>
-    <button id="startBtn" class="btn" style="display: block;">Начать фокус</button>
-    <button id="claimBtn" class="btn btn-claim">Забрать SFP</button>
+    <div class="circle"></div>
+    <div class="timer" id="timer">0.0s</div>
+    <button class="btn" id="startBtn" style="display: block; background: #007bff;">Начать</button>
+    <button class="btn" id="claimBtn">Забрать</button>
 
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
         let isMining = false;
-        let timerInterval;
         let seconds = 0;
-        
-        const circle = document.getElementById('circle');
-        const timerDisplay = document.getElementById('timer');
-        const startBtn = document.getElementById('startBtn');
-        const claimBtn = document.getElementById('claimBtn');
-        const statusText = document.getElementById('status');
+        let timer;
 
-        startBtn.addEventListener('click', () => {
+        document.getElementById('startBtn').onclick = function() {
             if (isMining) return;
             isMining = true;
             seconds = 0;
-            circle.classList.add('pulsing');
-            startBtn.style.display = 'none';
-            claimBtn.style.display = 'none';
-            statusText.innerText = "Майнинг идет...";
+            this.style.display = 'none';
+            document.getElementById('claimBtn').style.display = 'none';
             
-            timerInterval = setInterval(() => {
+            timer = setInterval(() => {
                 seconds += 0.1;
-                timerDisplay.innerText = seconds.toFixed(1) + 's';
+                document.getElementById('timer').innerText = seconds.toFixed(1) + 's';
+                if (seconds > 5) document.getElementById('claimBtn').style.display = 'block';
             }, 100);
-        });
+        };
+
+        document.getElementById('claimBtn').onclick = function() {
+            if (seconds > 0) {
+                const chatId = tg.initDataUnsafe.user.id;
+                const url = 'https://focus-mine-bot.onrender.com/claim?user_id=' + chatId + '&seconds=' + seconds.toFixed(1);
+                
+                // Отправляем запрос и показываем результат на экране
+                fetch(url)
+                    .then(res => res.text())
+                    .then(text => alert("Ответ сервера: " + text))
+                    .catch(err => alert("Ошибка: " + err));
+            }
+        };
 
         document.addEventListener("visibilitychange", () => {
             if (document.hidden && isMining) {
-                clearInterval(timerInterval);
+                clearInterval(timer);
                 isMining = false;
-                circle.classList.remove('pulsing');
-                statusText.innerText = "Фокус потерян!";
-                startBtn.style.display = 'block';
-                startBtn.innerText = "Попробовать снова";
+                document.getElementById('startBtn').style.display = 'block';
+                document.getElementById('startBtn').innerText = "Снова";
             }
         });
-
-        claimBtn.addEventListener('click', () => {
-            if (seconds > 0) {
-                const chatId = tg.initDataUnsafe.user.id;
-                const url = https://focus-mine-bot.onrender.com/claim?user_id=${chatId}&seconds=${seconds.toFixed(1)};
-                tg.close();
-                fetch(url).catch(e => console.log(e));
-            }
-        });
-
-        setInterval(() => {
-            if (isMining && seconds > 5) {
-                claimBtn.style.display = 'block';
-            }
-        }, 1000);
     </script>
 </body>
 </html>
