@@ -1,4 +1,4 @@
 pyTelegramBotAPI
 flask
 flask-cors
-libsql-client
+libsql
