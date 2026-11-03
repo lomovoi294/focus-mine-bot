@@ -59,24 +59,7 @@
                 statusText.innerText = "Фокус потерян!";
                 startBtn.style.display = 'block';
                 startBtn.innerText = "Попробовать снова";
-            }
-        });
-
-        // Отправка напрямую на сервер Render
-        claimBtn.addEventListener('click', () => {
-            if (seconds > 0) {
-                const chatId = tg.initDataUnsafe.user.id;
-                const url = https://focus-mine-bot.onrender.com/claim?user_id=${chatId}&seconds=${seconds.toFixed(1)};
-                
-                // Отправляем запрос на сервер (без ожидания ответа, чтобы не тормозить)
-                fetch(url).catch(e => console.log("Ошибка отправки:", e));
-                
-                // Закрываем окно
-                setTimeout(() => { tg.close(); }, 500);
-            }
-        });
-        
-        setInterval(() => {
+            }setInterval(() => {
             if (isMining && seconds > 5) {
                 claimBtn.style.display = 'block';
             }
@@ -84,3 +67,19 @@
     </script>
 </body>
 </html>
+        });
+
+        claimBtn.addEventListener('click', () => {
+            if (seconds > 0) {
+                const chatId = tg.initDataUnsafe.user.id;
+                const url = https://focus-mine-bot.onrender.com/claim?user_id=${chatId}&seconds=${seconds.toFixed(1)};
+                
+                // Сначала закрываем окно, чтобы кнопка точно сработала
+                tg.close();
+                
+                // А потом отправляем запрос (в фоне)
+                fetch(url).catch(e => console.log("Ошибка:", e));
+            }
+        });
+
+        
