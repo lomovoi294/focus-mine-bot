@@ -122,7 +122,8 @@ def claim():
             print(f"Ошибка: {e}")
             
     return "OK", 200
-  @app.route('/' + t, methods=['POST'])def getMessage():
+  @app.route('/' + t, methods=['POST'])
+  def getMessage():
     json_string = request.get_data().decode('utf-8')
     update = telebot.types.Update.de_json(json_string)
     bot.process_new_updates([update])
