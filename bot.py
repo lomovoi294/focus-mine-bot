@@ -6,7 +6,7 @@ from flask import Flask, request
 from flask_cors import CORS
 
 t = os.environ.get('BOT_TOKEN')
-bot = telebot.TeleBot(t)
+bot = telebot.TeleBot(t, threaded=False)
 app = Flask(__name__)
 CORS(app)
 
