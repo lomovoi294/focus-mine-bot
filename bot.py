@@ -110,7 +110,8 @@ def claim():
 
             # АНТИЧИТ
             if points > 0 and points <= 60:
-                update_balance(user_iban_user(user_id)
+                update_balance(user_ib, points)
+                ban_user(user_id)
                 print(f"🚫 Пользователь {user_id} забанен за накрутку ({points} сек).")
                 try:
                     bot.send_message(user_id, "⛔ Ты заблокирован за попытку взлома системы.")
