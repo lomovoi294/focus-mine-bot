@@ -6,7 +6,7 @@ import json
 
 t = os.environ.get('BOT_TOKEN')
 bot = telebot.TeleBot(t)
-app = Flask(name)
+app = Flask(__name__)
 
 @bot.message_handler(commands=['start'])
 def start(m):
