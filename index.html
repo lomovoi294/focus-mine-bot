@@ -44,7 +44,7 @@
             if (isMining) return;
             isMining = true;
             seconds = 0;
-            this.style.display = 'none';
+            this.style.display = 'none';document.querySelector('.circle').classList.add('pulsing');
             document.getElementById('claimBtn').style.display = 'none';
             
             timer = setInterval(() => {
