@@ -319,9 +319,9 @@ def claim():
     if 0 < raw_points <= 60:
         is_boosted = time.time() < get_boost_end_time(user_id)
         final_points = raw_points * 2 if is_boosted else raw_points
-update_balance(user_id, final_points)
-                boost_text = " (x2)" if is_boosted else ""
-                bot.send_message(user_id, f"✅ Намайнил {final_points} SFP{boost_text}.\nБаланс: {get_balance(user_id):.1f} SFP")
+        update_balance(user_id, final_points)
+        boost_text = " (x2)" if is_boosted else ""
+        bot.send_message(user_id, f"✅ Намайнил {final_points} SFP{boost_text}.\nБаланс: {get_balance(user_id):.1f} SFP")
                 
                 referrer = get_referrer(user_id)
                 if referrer and referrer != user_id:
