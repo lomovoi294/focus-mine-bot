@@ -5,7 +5,6 @@ from flask import Flask, request
 from flask_cors import CORS
 import libsql
 
-# --- Настройки ---
 t = os.environ.get('BOT_TOKEN')
 turso_url = os.environ.get('TURSO_URL')
 turso_token = os.environ.get('TURSO_TOKEN')
@@ -14,13 +13,31 @@ bot = telebot.TeleBot(t, threaded=False)
 app = Flask(__name__)
 CORS(app)
 
-# --- База данных (Turso) ---
 def get_conn():
     return libsql.connect(turso_url, auth_token=turso_token)
 
 def init_db():
     conn = get_conn()
-    conn.execute("CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY, balance REAL, referrer_id INTEGER)")
+    # Создаем таблицу, если ее нет
+    conn.execute("CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY, balance REAL, referrer_id INTEGER, is_banned INTEGER DEFAULT 0)")
+    # Пытаемся добавить колонку is_banned, если база старая (игнорируем ошибку, если колонка уже есть)
+    try:
+        conn.execute("ALTER TABLE users ADD COLUMN is_banned INTEGER DEFAULT 0")
+    except:
+        pass
+    conn.commit()
+    conn.close()
+
+def is_user_banned(user_id):
+    conn = get_conn()
+    cursor = conn.execute("SELECT is_banned FROM users WHERE user_id = ?", [user_id])
+    row = cursor.fetchone()
+    conn.close()
+    return row[0] == 1 if row else False
+
+def ban_user(user_id):
+    conn = get_conn()
+    conn.execute("UPDATE users SET is_banned = 1 WHERE user_id = ?", [user_id])
     conn.commit()
     conn.close()
 
@@ -28,7 +45,7 @@ def add_user(user_id, referrer_id=None):
     conn = get_conn()
     cursor = conn.execute("SELECT * FROM users WHERE user_id = ?", [user_id])
     if not cursor.fetchone():
-        conn.execute("INSERT INTO users (user_id, balance, referrer_id) VALUES (?, ?, ?)", [user_id, 0, referrer_id])
+        conn.execute("INSERT INTO users (user_id, balance, referrer_id, is_banned) VALUES (?, ?, ?, 0)", [user_id, 0, referrer_id])
         conn.commit()
     conn.close()
 
@@ -47,18 +64,19 @@ def get_balance(user_id):
 
 init_db()
 
-# --- Команды бота ---
 @bot.message_handler(commands=['start'])
 def start(m):
+    if is_user_banned(m.from_user.id):
+        bot.send_message(m.chat.id, "⛔ Твой аккаунт заблокирован за попытку накрутки. Доступ закрыт.")
+        return
+
     args = m.text.split()
     referrer_id = None
     if len(args) > 1:
         try:
             referrer_id = int(args[1])
-            if referrer_id == m.from_user.id:
-                referrer_id = None
-        except ValueError:
-            pass
+            if referrer_id == m.from_user.id: referrer_id = None
+        except ValueError: pass
 
     add_user(m.from_user.id, referrer_id)
     
@@ -72,11 +90,11 @@ def start(m):
 
 @bot.message_handler(commands=['invite'])
 def invite(m):
+    if is_user_banned(m.from_user.id): return
     u = bot.get_me().username
     link = f"https://t.me/{u}?start={m.from_user.id}"
     bot.send_message(m.chat.id, f"Твоя ссылка: {link}")
 
-# --- Прием данных от сайта ---
 @app.route('/claim')
 def claim():
     user_id = request.args.get('user_id')
@@ -87,20 +105,23 @@ def claim():
             user_id = int(user_id)
             points = int(float(seconds))
             
-            # АНТИЧИТ: максимум 60 секунд за один раз
+            if is_user_banned(user_id):
+                return "OK", 200 # Если забанен, просто игнорируем
+
+            # АНТИЧИТ
             if points > 0 and points <= 60:
-                update_balance(user_id, points)
-                new_balance = get_balance(user_id)
-                bot.send_message(user_id, f"✅ Успешно! Ты намайнил {points} SFP.\nТвой новый баланс: {new_balance:.1f} SFP")
-            else:
-                print(f"⚠️ Попытка накрутки от {user_id}: {points} секунд")
+                update_balance(user_iban_user(user_id)
+                print(f"🚫 Пользователь {user_id} забанен за накрутку ({points} сек).")
+                try:
+                    bot.send_message(user_id, "⛔ Ты заблокирован за попытку взлома системы.")
+                except:
+                    pass
                 
         except Exception as e:
-            print(f"Ошибка начисления: {e}")
+            print(f"Ошибка: {e}")
             
     return "OK", 200
 
-# --- Webhook ---
 @app.route('/' + t, methods=['POST'])
 def getMessage():
     json_string = request.get_data().decode('utf-8')
@@ -114,4 +135,9 @@ def webhook():
     bot.set_webhook(url=f'https://focus-mine-bot.onrender.com/{t}')
     return "Webhook установлен!", 200
 
-app.run(host="0.0.0.0", port=int(os.environ.get('PORT', 5000)))
+app.run(host="0.0.0.0", port=int(os.environ.get('PORT', 5000)))d, points)
+                new_balance = get_balance(user_id)
+                bot.send_message(user_id, f"✅ Успешно! Ты намайнил {points} SFP.\nТвой новый баланс: {new_balance:.1f} SFP")
+            else:
+                # БАНИМ ЗА НАКРУТКУ
+                
