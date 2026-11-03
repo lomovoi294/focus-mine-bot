@@ -1,6 +1,7 @@
 import telebot
 import os
 import time
+import json
 from telebot import types
 from flask import Flask, request
 from flask_cors import CORS
@@ -9,9 +10,10 @@ import libsql
 t = os.environ.get('BOT_TOKEN')
 turso_url = os.environ.get('TURSO_URL')
 turso_token = os.environ.get('TURSO_TOKEN')
+admin_id = int(os.environ.get('ADMIN_ID', 0))
 
 bot = telebot.TeleBot(t, threaded=False)
-app = Flask(__name__)
+app = Flask(name)
 CORS(app)
 
 def get_conn():
@@ -20,13 +22,15 @@ def get_conn():
 def init_db():
     conn = get_conn()
     conn.execute("CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY, balance REAL, referrer_id INTEGER, is_banned INTEGER DEFAULT 0, last_daily INTEGER DEFAULT 0, boost_end_time INTEGER DEFAULT 0)")
-    # Безопасно добавляем колонки, если база старая
     try: conn.execute("ALTER TABLE users ADD COLUMN is_banned INTEGER DEFAULT 0")
     except: pass
     try: conn.execute("ALTER TABLE users ADD COLUMN last_daily INTEGER DEFAULT 0")
     except: pass
     try: conn.execute("ALTER TABLE users ADD COLUMN boost_end_time INTEGER DEFAULT 0")
     except: pass
+    
+    conn.execute("""CREATE TABLE IF NOT EXISTS withdrawals 
+                    (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, amount REAL, wallet TEXT, status TEXT DEFAULT 'pending', timestamp INTEGER)""")
     conn.commit()
     conn.close()
 
@@ -104,9 +108,29 @@ def set_boost_end_time(user_id, timestamp):
     conn.commit()
     conn.close()
 
+def create_withdrawal(user_id, amount, wallet):
+    conn = get_conn()
+    cursor = conn.execute("INSERT INTO withdrawals (user_id, amount, wallet, timestamp) VALUES (?, ?, ?, ?)", [user_id, amount, wallet, int(time.time())])
+    req_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return req_id
+
+def get_withdrawal(req_id):
+    conn = get_conn()
+    cursor = conn.execute("SELECT * FROM withdrawals WHERE id = ?", [req_id])
+    row = cursor.fetchone()
+    conn.close()
+    return row
+
+def update_withdrawal_status(req_id, status):
+    conn = get_conn()
+    conn.execute("UPDATE withdrawals SET status = ? WHERE id = ?", [status, req_id])
+    conn.commit()
+    conn.close()
+
 init_db()
 
-# --- Меню ---
 def get_main_menu():
     markup = types.InlineKeyboardMarkup()
     web_app = types.WebAppInfo(url="https://lomovoi294.github.io/focus-mine-bot/")
@@ -114,10 +138,11 @@ def get_main_menu():
     btn_daily = types.InlineKeyboardButton("🎁 Ежедневный бонус", callback_data="daily_reward")
     btn_profile = types.InlineKeyboardButton("👤 Мой профиль", callback_data="profile")
     btn_shop = types.InlineKeyboardButton("🛒 Магазин", callback_data="shop")
+    btn_withdraw = types.InlineKeyboardButton("💸 Вывести SFP", callback_data="withdraw")
     
     markup.add(btn_mine)
     markup.add(btn_daily, btn_profile)
-    markup.add(btn_shop)
+    markup.add(btn_shop, btn_withdraw)
     return markup
 
 @bot.message_handler(commands=['start'])
@@ -139,169 +164,143 @@ def start(m):
     balance = get_balance(m.from_user.id)
     bot.send_message(m.chat.id, f"Привет! Это FocusMine.\nТвой баланс: {balance:.1f} SFP", reply_markup=get_main_menu())
 
-@bot.message_handler(commands=['invite'])
-def invite(m):
-    if is_user_banned(m.from_user.id): return
-    u = bot.get_me().username
-    link = f"https://t.me/{u}?start={m.from_user.id}"
-    bot.send_message(m.chat.id, f"Твоя ссылка для друзей:\n{link}\n\nЗа каждого друга ты получаешь 10% от его майнинга!")
+@bot.message_handler(commands=['admin'])
+def admin_panel(m):
+    if m.from_user.id != admin_id: return
+    bot.send_message(m.chat.id, "🛠 Админ-панель активна.")
 
-# --- Профиль ---
 @bot.callback_query_handler(func=lambda call: call.data == "profile")
 def callback_profile(call):
     user_id = call.from_user.id
-    if is_user_banned(user_id):
-        bot.answer_callback_query(call.id, "⛔ Доступ закрыт.")
-        return
-        
+    if is_user_banned(user_id): return
     balance = get_balance(user_id)
     refs = get_referrals_count(user_id)
     boost_time = get_boost_end_time(user_id)
+    boost_status = f"Активен (осталось {int((boost_time - time.time()) / 60)} мин.)" if time.time() < boost_time else "Не активен"
     
-    boost_status = "Не активен"
-    if time.time() < boost_time:
-        rem = int((boost_time - time.time()) / 60)
-        boost_status = f"Активен (осталось {rem} мин.)"
-    
-    text = (
-        f"👤 Профиль игрока\n\n"
-        f"🆔 ID: {user_id}\n"
-        f"💰 Баланс: {balance:.1f} SFP\n"
-        f"🤝 Друзей: {refs}\n"
-        f"⚡️ Буст: {boost_status}"
-    )
+    text = f"👤 Профиль\n\n🆔 ID: {user_id}\n💰 Баланс: {balance:.1f} SFP\n🤝 Друзей: {refs}\n⚡️ Буст: {boost_status}"
     bot.send_message(call.message.chat.id, text, parse_mode='Markdown')
 
-# --- Магазин ---
 @bot.callback_query_handler(func=lambda call: call.data == "shop")
 def callback_shop(call):
     user_id = call.from_user.id
     balance = get_balance(user_id)
-    
-    text = (
-        f"🛒 Магазин FocusMine\n\n"
-        f"Твой баланс: {balance:.1f} SFP\n\n"
-        f"⚡️ Ускоритель x2 (1 час)\n"
-        f"Удваивает добычу SFP на 60 минут.\n"
-        f"Цена: 500 SFP"
-    )
-    
+    text = f"🛒 Магазин\n\nБаланс: {balance:.1f} SFP\n\n⚡️ Ускоритель x2 (1 час)\nЦена: 500 SFP"
     markup = types.InlineKeyboardMarkup()
-    btn_buy = types.InlineKeyboardButton("Купить за 500 SFP", callback_data="buy_boost")
-    btn_back = types.InlineKeyboardButton("⬅️ Назад", callback_data="back_to_menu")
-    markup.add(btn_buy)
-    markup.add(btn_back)
-    
+    markup.add(types.InlineKeyboardButton("Купить за 500 SFP", callback_data="buy_boost"))
+    markup.add(types.InlineKeyboardButton("⬅️ Назад", callback_data="back_to_menu"))
     bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=markup)
 
 @bot.callback_query_handler(func=lambda call: call.data == "buy_boost")
 def callback_buy_boost(call):
     user_id = call.from_user.id
-    balance = get_balance(user_id)
-    price = 500
-    
-    if balance >= price:
-        # Списываем деньги
-        update_balance(user_id, -price)
-        
-        # Активируем буст (текущее время + 1 час)
-        new_boost_time = int(time.time()) + 3600
-        set_boost_end_time(user_id, new_boost_time)
-        
-        bot.answer_callback_query(call.id, "🔥 Буст активирован на 1 час!")
-        
-        text = (
-            f"✅ Успешная покупка!\n\n"
-            f"Ты купил Ускоритель x2 на 1 час.\n"
-            f"Теперь твоя добыча удвоена!\n\n"
-            f"Остаток на балансе: {get_balance(user_id):.1f} SFP"
-        )
-        markup = types.InlineKeyboardMarkup()
-        btn_back = types.InlineKeyboardButton("⬅️ В меню", callback_data="back_to_menu")
-        markup.add(btn_back)
-        bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=markup)
+    if get_balance(user_id) >= 500:
+        update_balance(user_id, -500)
+        set_boost_end_time(user_id, int(time.time()) + 3600)
+        bot.answer_callback_query(call.id, "🔥 Буст активирован!")
+        bot.edit_message_text(f"✅ Успешно! Буст x2 активирован.\nБаланс: {get_balance(user_id):.1f} SFP", call.message.chat.id, call.message.message_id)
     else:
-        bot.answer_callback_query(call.id, f"❌ Недостаточно средств!\nНужно 500 SFP, у тебя {balance:.1f} SFP.", show_alert=True)
- # --- Возврат в меню ---
+        bot.answer_callback_query(call.id, "❌ Недостаточно SFP!", show_alert=True)
+
 @bot.callback_query_handler(func=lambda call: call.data == "back_to_menu")
 def callback_back(call):
-    balance = get_balance(call.from_user.id)
-    text = f"Привет! Это FocusMine.\nТвой баланс: {balance:.1f} SFP"
-    bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=get_main_menu())
+    bot.edit_message_text(f"Главное меню.\nБаланс: {get_balance(call.from_user.id):.1f} SFP", call.message.chat.id, call.message.message_id, reply_markup=get_main_menu())
 
-# --- Ежедневный бонус ---
 @bot.callback_query_handler(func=lambda call: call.data == "daily_reward")
 def callback_daily(call):
     user_id = call.from_user.id
-    if is_user_banned(user_id):
-        bot.answer_callback_query(call.id, "⛔ Доступ закрыт.")
-        return
-
+    if is_user_banned(user_id): return
     now = int(time.time())
-    last_claim = get_last_daily(user_id)
-    
-    if now - last_claim >= 86400:
-        reward = 50
-        update_balance(user_id, reward)
+    if now - get_last_daily(user_id) >= 86400:
+        update_balance(user_id, 50)
         set_last_daily(user_id, now)
-        
-        bot.answer_callback_query(call.id, f"🎁 Ты получил {reward} SFP!")
-        bot.send_message(call.message.chat.id, f"✅ Бонус получен.\nБаланс: {get_balance(user_id):.1f} SFP", reply_markup=get_main_menu())
+        bot.answer_callback_query(call.id, "🎁 Ты получил 50 SFP!")
+        bot.send_message(call.message.chat.id, f"✅ Бонус получен. Баланс: {get_balance(user_id):.1f} SFP", reply_markup=get_main_menu())
     else:
-        remaining = 86400 - (now - last_claim)
-        hours = remaining // 3600
-        minutes = (remaining % 3600) // 60
-        bot.answer_callback_query(call.id, f"⏳ Жди еще {hours} ч. {minutes} мин.", show_alert=True)
+        rem = 86400 - (now - get_last_daily(user_id))
+        bot.answer_callback_query(call.id, f"⏳ Жди еще {rem // 3600} ч. {(rem % 3600) // 60} мин.", show_alert=True)
 
-# --- Прием данных от сайта (с учетом БУСТА) ---
-@app.route('/claim')
-def claim():
-    user_id = request.args.get('user_id')
-    seconds = request.args.get('seconds')
+@bot.callback_query_handler(func=lambda call: call.data == "withdraw")
+def callback_withdraw(call):
+    user_id = call.from_user.id
+    if get_balance(user_id) < 1000:
+        bot.answer_callback_query(call.id, f"❌ Минимум 1000 SFP.\nУ тебя: {get_balance(user_id):.1f}", show_alert=True)
+        return
+    msg = bot.send_message(call.message.chat.id, "💸 Введи адрес кошелька TON:")
+    bot.register_next_step_handler(msg, process_wallet_address)
+
+def process_wallet_address(m):
+    msg = bot.send_message(m.chat.id, "Введи сумму SFP (мин. 1000):")
+    bot.register_next_step_handler(msg, process_withdraw_amount, m.text.strip())
+
+def process_withdraw_amount(m, wallet):
+    try:
+        amount = float(m.text)
+        user_id = m.from_user.id
+        if amount < 1000 or amount > get_balance(user_id):
+            bot.send_message(m.chat.id, "❌ Неверная сумма.")
+            return
+        update_balance(user_id, -amount)
+        req_id = create_withdrawal(user_id, amount, wallet)
+        bot.send_message(m.chat.id, f"✅ Заявка на {amount} SFP создана! Ожидай.")
+        
+        if admin_id:
+            text = f"🔔 Заявка #{req_id}\nОт: {user_id}\nСумма: {amount} SFP\nКошелек: {wallet}"
+            markup = types.InlineKeyboardMarkup()
+            markup.add(types.InlineKeyboardButton("✅ Выплачено", callback_data=f"approve_{req_id}"))
+            markup.add(types.InlineKeyboardButton("❌ Отклонить", callback_data=f"reject_{req_id}"))
+            bot.send_message(admin_id, text, parse_mode='Markdown', reply_markup=markup)
+    except ValueError:
+        bot.send_message(m.chat.id, "❌ Введи число.")
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("approve_") or call.data.startswith("reject_"))
+def callback_admin_action(call):
+    if call.from_user.id != admin_id: return
+    action, req_id = call.data.split("_")
+    req = get_withdrawal(int(req_id))
+    if not req or req[4] != 'pending': return
+        
+    user_id, amount = req[1], req[2]
+    if action == "approve":
+        update_withdrawal_status(int(req_id), "approved")
+        bot.edit_message_text(f"✅ Заявка {req_id} одобрена.", call.message.chat.id, call.message.message_id)
+        bot.send_message(user_id, f"🎉 Вывод {amount} SFP одобрен!")
+    else:
+        update_balance(user_id, amount)
+        update_withdrawal_status(int(req_id), "rejected")
+        bot.edit_message_text(f"❌ Заявка {req_id} отклонена.", call.message.chat.id, call.message.message_id)
+        bot.send_message(user_id, f"⚠️ Вывод отклонен. {amount} SFP возвращены.")
+
+# --- НОВЫЙ ОБРАБОТЧИК ДАННЫХ ИЗ MINI APP ---
+@bot.message_handler(content_types=['web_app_data'])
+def web_app(web_app_message):
+    user_id = web_app_message.from_user.id
+    if is_user_banned(user_id): return
     
-    if user_id and seconds:
-        try:
-            user_id = int(user_id)
-            raw_points = int(float(seconds))
+    try:
+        data = json.loads(web_app_message.web_app_data.data)
+        raw_points = int(float(data.get("seconds", 0)))
+        
+        if 0 < raw_points <= 60:
+            is_boosted = time.time() < get_boost_end_time(user_id)
+            final_points = raw_points * 2 if is_boosted else raw_points
             
-            if is_user_banned(user_id):
-                return "OK", 200
-
-            # Античит проверяет СЫРЫЕ секунды (до буста)
-            if raw_points > 0 and raw_points <= 60:
-                # Проверяем буст
-                boost_end = get_boost_end_time(user_id)
-                is_boosted = time.time() < boost_end
-                
-                # Если буст есть, умножаем на 2
-                final_points = raw_points * 2 if is_boosted else raw_points
-                
-                update_balance(user_id, final_points)
-                new_balance = get_balance(user_id)
-                
-                boost_text = " (x2 Буст! 🔥)" if is_boosted else ""
-                bot.send_message(user_id, f"✅ Успешно! Ты намайнил {final_points} SFP{boost_text}.\nБаланс: {new_balance:.1f} SFP")
-                
-                # Реферальные 10%
-                referrer = get_referrer(user_id)
-                if referrer and referrer != user_id:
-                    ref_bonus = int(final_points * 0.10)
-                    if ref_bonus > 0:
-                        update_balance(referrer, ref_bonus)
-                        try:
-                            bot.send_message(referrer, f"💸 Твой реферал намайнил {final_points} SFP.\nТебе начислено {ref_bonus} SFP (10%).")
-                        except: pass
-                        
-            else:
-                ban_user(user_id)
-                print(f"🚫 Пользователь {user_id} забанен за накрутку ({raw_points} сек).")
-                
-        except Exception as e:
-            print(f"Ошибка: {e}")
+            update_balance(user_id, final_points)
+            boost_text = " (x2)" if is_boosted else ""
+            bot.send_message(user_id, f"✅ Намайнил {final_points} SFP{boost_text}.\nБаланс: {get_balance(user_id):.1f} SFP")
             
-    return "OK", 200
+            referrer = get_referrer(user_id)
+            if referrer and referrer != user_id:
+                ref_bonus = int(final_points * 0.10)
+                if ref_bonus > 0:
+                    update_balance(referrer, ref_bonus)
+                    try: bot.send_message(referrer, f"💸 Реферал намайнил {final_points} SFP. Тебе +{ref_bonus} SFP.")
+                    except: pass
+        else:
+            ban_user(user_id)
+    except Exception as e:
+        print(f"Ошибка web_app_data: {e}")
 
-# --- Webhook ---
 @app.route('/' + t, methods=['POST'])
 def getMessage():
     json_string = request.get_data().decode('utf-8')
@@ -315,4 +314,4 @@ def webhook():
     bot.set_webhook(url=f'https://focus-mine-bot.onrender.com/{t}')
     return "Webhook установлен!", 200
 
-app.run(host="0.0.0.0", port=int(os.environ.get('PORT', 5000)))       
+app.run(host="0.0.0.0", port=int(os.environ.get('PORT', 5000)))
