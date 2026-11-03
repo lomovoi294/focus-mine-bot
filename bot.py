@@ -2,7 +2,6 @@ import telebot
 import os
 from telebot import types
 from flask import Flask, request
-import json
 
 t = os.environ.get('BOT_TOKEN')
 bot = telebot.TeleBot(t)
@@ -22,20 +21,20 @@ def invite(m):
     link = f"https://t.me/{u}?start={m.from_user.id}"
     bot.send_message(m.chat.id, f"Твоя ссылка: {link}")
 
-@bot.message_handler(content_types=['web_app_data'])
-def web_app(web_app_message):
-    try:
-        data = json.loads(web_app_message.web_app_data.data)
-        if data.get("action") == "claim":
-            seconds = float(data.get("seconds", 0))
-            points = int(seconds)
-            bot.send_message(
-                web_app_message.chat.id, 
-                f"✅ Успешно! Ты намайнил {points} SFP."
-            )
-    except Exception as e:
-        print(f"Ошибка: {e}")
+# Новый маршрут для приема данных от сайта
+@app.route('/claim')
+def claim():
+    user_id = request.args.get('user_id')
+    seconds = request.args.get('seconds')
+    if user_id and seconds:
+        points = int(float(seconds))
+        try:
+            bot.send_message(user_id, f"✅ Успешно! Ты намайнил {points} SFP.")
+        except Exception as e:
+            print(f"Ошибка отправки сообщения: {e}")
+    return "OK", 200
 
+# Webhook для работы команд самого бота (/start, /invite)
 @app.route('/' + t, methods=['POST'])
 def getMessage():
     json_string = request.get_data().decode('utf-8')
@@ -49,5 +48,5 @@ def webhook():
     bot.set_webhook(url=f'https://focus-mine-bot.onrender.com/{t}')
     return "Webhook установлен!", 200
 
-if __name__=="__main__":
+if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get('PORT', 5000)))
