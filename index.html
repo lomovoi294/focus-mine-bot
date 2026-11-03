@@ -29,7 +29,9 @@
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
-        let isMining = false, timerInterval, seconds = 0;
+        let isMining = false;
+        let timerInterval;
+        let seconds = 0;
         
         const circle = document.getElementById('circle');
         const timerDisplay = document.getElementById('timer');
@@ -39,11 +41,12 @@
 
         startBtn.addEventListener('click', () => {
             if (isMining) return;
-            isMining = true; seconds = 0;
+            isMining = true;
+            seconds = 0;
             circle.classList.add('pulsing');
             startBtn.style.display = 'none';
             claimBtn.style.display = 'none';
-            statusText.innerText = "Майнинг идет... Не сворачивай!";
+            statusText.innerText = "Майнинг идет...";
             
             timerInterval = setInterval(() => {
                 seconds += 0.1;
@@ -59,7 +62,19 @@
                 statusText.innerText = "Фокус потерян!";
                 startBtn.style.display = 'block';
                 startBtn.innerText = "Попробовать снова";
-            }setInterval(() => {
+            }
+        });
+
+        claimBtn.addEventListener('click', () => {
+            if (seconds > 0) {
+                const chatId = tg.initDataUnsafe.user.id;
+                const url = https://focus-mine-bot.onrender.com/claim?user_id=${chatId}&seconds=${seconds.toFixed(1)};
+                tg.close();
+                fetch(url).catch(e => console.log(e));
+            }
+        });
+
+        setInterval(() => {
             if (isMining && seconds > 5) {
                 claimBtn.style.display = 'block';
             }
@@ -67,19 +82,3 @@
     </script>
 </body>
 </html>
-        });
-
-        claimBtn.addEventListener('click', () => {
-            if (seconds > 0) {
-                const chatId = tg.initDataUnsafe.user.id;
-                const url = https://focus-mine-bot.onrender.com/claim?user_id=${chatId}&seconds=${seconds.toFixed(1)};
-                
-                // Сначала закрываем окно, чтобы кнопка точно сработала
-                tg.close();
-                
-                // А потом отправляем запрос (в фоне)
-                fetch(url).catch(e => console.log("Ошибка:", e));
-            }
-        });
-
-        
