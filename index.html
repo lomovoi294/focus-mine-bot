@@ -1,3 +1,4 @@
+<!-- v3 -->
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -9,7 +10,7 @@
         body { margin: 0; padding: 0; background: #0d1117; color: white; font-family: Arial; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
         .circle { width: 200px; height: 200px; border-radius: 50%; background: radial-gradient(circle, #007bff 0%, #001a33 100%); box-shadow: 0 0 30px #007bff; margin-bottom: 20px; transition: all 0.3s ease-in-out; }
         .pulsing { animation: pulse 2s infinite alternate; }
-        @keyframes pulse { 0% { transform: scale(1); box-shadow: 0 0 20px #007bff, 0 0 40px #007bff; } 100% { transform: scale(1.1); box-shadow: 0 0 40px #007bff, 0 0 80px #007bff; } }
+        @keyframes pulse { 0% { transform: scale(1); box-shadow: 0 0 20px inherit, 0 0 40px inherit; } 100% { transform: scale(1.1); box-shadow: 0 0 40px inherit, 0 0 80px inherit; } }
         .timer { font-size: 40px; font-weight: bold; margin-bottom: 20px; }
         .btn { padding: 15px 30px; font-size: 18px; color: white; background: #238636; border: none; border-radius: 10px; margin-top: 10px; cursor: pointer; display: none; }
     </style>
@@ -31,6 +32,26 @@
         const timerDisplay = document.getElementById('timer');
         const startBtn = document.getElementById('startBtn');
         const claimBtn = document.getElementById('claimBtn');
+
+        // --- Установка цвета скина ---
+        const urlParams = new URLSearchParams(window.location.search);
+        const skin = urlParams.get('skin') || 'blue';
+        
+        const colors = {
+            'blue': { main: '#007bff', dark: '#001a33', shadow: '#007bff' },
+            'red': { main: '#ff3333', dark: '#330000', shadow: '#ff3333' },
+            'green': { main: '#33ff33', dark: '#003300', shadow: '#33ff33' },
+            'purple': { main: '#9933ff', dark: '#1a0033', shadow: '#9933ff' }
+        };
+        
+        const theme = colors[skin] || colors['blue'];
+        circle.style.background = `radial-gradient(circle, ${theme.main} 0%, ${theme.dark} 100%)`;
+        circle.style.boxShadow = `0 0 30px ${theme.shadow}`;
+        
+        // Динамически создаем анимацию пульсации с нужным цветом
+        const styleSheet = document.styleSheets[0];
+        const keyframes = `@keyframes pulse { 0% { transform: scale(1); box-shadow: 0 0 20px ${theme.shadow}, 0 0 40px ${theme.shadow}; } 100% { transform: scale(1.1); box-shadow: 0 0 40px ${theme.shadow}, 0 0 80px ${theme.shadow}; } }`;
+        styleSheet.insertRule(keyframes, styleSheet.cssRules.length);
 
         startBtn.onclick = function() {
             if (isMining) return;
@@ -55,10 +76,8 @@
                 const chatId = tg.initDataUnsafe.user.id;
                 const url = 'https://focus-mine-bot.onrender.com/claim?user_id=' + chatId + '&seconds=' + seconds.toFixed(1);
                 
-                // Отправляем запрос (не ждем ответа)
                 fetch(url).catch(e => console.log(e));
                 
-                // Принудительно закрываем окно через 1 секунду
                 setTimeout(() => {
                     tg.close();
                 }, 1000);
