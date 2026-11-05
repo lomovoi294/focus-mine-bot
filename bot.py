@@ -185,13 +185,7 @@ def collect_income(user_id):
 # --- Меню ---
 def get_main_menu(user_id):
     markup = types.InlineKeyboardMarkup()
-    # Получаем текущий скин игрока
-    current_skin = get_skin(user_id)
-    
-    # Передаем скин в ссылку (например, ?skin=red)
-    web_app_url = f"https://lomovoi294.github.io/focus-mine-bot/?skin={current_skin}"
-    web_app = types.WebAppInfo(url=web_app_url)
-    
+    web_app = types.WebAppInfo(url="https://lomovoi294.github.io/focus-mine-bot/")
     btn_mine = types.InlineKeyboardButton("Шахта 🟢", web_app=web_app)
     btn_daily = types.InlineKeyboardButton("🎁 Ежедневный бонус", callback_data="daily_reward")
     btn_profile = types.InlineKeyboardButton("👤 Мой профиль", callback_data="profile")
@@ -321,7 +315,7 @@ def callback_collect_income(call):
 @bot.callback_query_handler(func=lambda call: call.data.startswith("buy_skin_"))
 def callback_buy_skin(call):
     user_id = call.from_user.id
-    skin = call.data.split("_")[2] # red, green, purple
+    skin = call.data.split("_")[2]
     prices = {"red": 2000, "green": 2000, "purple": 3000}
     price = prices.get(skin, 999999)
     
@@ -333,8 +327,6 @@ def callback_buy_skin(call):
         update_balance(user_id, -price)
         set_skin(user_id, skin)
         bot.answer_callback_query(call.id, f"🎨 Скин куплен и надет!")
-        
-        # Обновляем сообщение магазина
         callback_shop(call)
     else:
         bot.answer_callback_query(call.id, f"❌ Нужно {price} SFP!", show_alert=True)
@@ -444,6 +436,12 @@ def claim():
         except Exception as e:
             print(f"Ошибка claim: {e}")
     return "OK", 200
+
+# --- НОВЫЙ МАРШРУТ ДЛЯ СКИНОВ ---
+@app.route('/get_skin/<int:user_id>')
+def get_user_skin_route(user_id):
+    skin = get_skin(user_id)
+    return skin, 200
 
 # --- Webhook ---
 @app.route('/' + t, methods=['POST'])
