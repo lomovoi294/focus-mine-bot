@@ -124,6 +124,27 @@ def get_top_players():
     conn.close()
     return rows
 
+def create_withdrawal(user_id, amount, wallet):
+    conn = get_conn()
+    cursor = conn.execute("INSERT INTO withdrawals (user_id, amount, wallet, timestamp) VALUES (?, ?, ?, ?)", [user_id, amount, wallet, int(time.time())])
+    req_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return req_id
+
+def get_withdrawal(req_id):
+    conn = get_conn()
+    cursor = conn.execute("SELECT * FROM withdrawals WHERE id = ?", [req_id])
+    row = cursor.fetchone()
+    conn.close()
+    return row
+
+def update_withdrawal_status(req_id, status):
+    conn = get_conn()
+    conn.execute("UPDATE withdrawals SET status = ? WHERE id = ?", [status, req_id])
+    conn.commit()
+    conn.close()
+
 init_db()
 
 # --- Система Рангов ---
@@ -141,15 +162,26 @@ def collect_income(user_id):
         
     last_time = get_last_income_time(user_id)
     now = int(time.time())
+    
+    # Если это первый сбор, просто записываем время и ничего не начисляем
+    if last_time == 0:
+        set_last_income_time(user_id, now)
+        return 0, 0
+        
     time_passed = now - last_time
     
-    # Доход: 100 SFP в час (считаем за каждые полные 3600 секунд)
+    # ОГРАНИЧЕНИЕ: начисляем максимум за 24 часа (86400 секунд)
+    if time_passed > 86400:
+        time_passed = 86400
+        
     hours_passed = time_passed // 3600
+    
     if hours_passed > 0:
         income = hours_passed * 100
         update_balance(user_id, income)
-        set_last_income_time(user_id, now)
+        set_last_income_time(user_id, last_time + (hours_passed * 3600))
         return income, hours_passed
+        
     return 0, 0
 
 # --- Меню ---
