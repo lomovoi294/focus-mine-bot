@@ -23,12 +23,17 @@ def get_conn():
 
 def init_db():
     conn = get_conn()
-    conn.execute("CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY, balance REAL, referrer_id INTEGER, is_banned INTEGER DEFAULT 0, last_daily INTEGER DEFAULT 0, boost_end_time INTEGER DEFAULT 0)")
+    conn.execute("CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY, balance REAL, referrer_id INTEGER, is_banned INTEGER DEFAULT 0, last_daily INTEGER DEFAULT 0, boost_end_time INTEGER DEFAULT 0, last_income_time INTEGER DEFAULT 0, skin TEXT DEFAULT 'blue')")
+    # Безопасное добавление новых колонок
     try: conn.execute("ALTER TABLE users ADD COLUMN is_banned INTEGER DEFAULT 0")
     except: pass
     try: conn.execute("ALTER TABLE users ADD COLUMN last_daily INTEGER DEFAULT 0")
     except: pass
     try: conn.execute("ALTER TABLE users ADD COLUMN boost_end_time INTEGER DEFAULT 0")
+    except: pass
+    try: conn.execute("ALTER TABLE users ADD COLUMN last_income_time INTEGER DEFAULT 0")
+    except: pass
+    try: conn.execute("ALTER TABLE users ADD COLUMN skin TEXT DEFAULT 'blue'")
     except: pass
     
     conn.execute("""CREATE TABLE IF NOT EXISTS withdrawals 
@@ -36,12 +41,16 @@ def init_db():
     conn.commit()
     conn.close()
 
-def is_user_banned(user_id):
+def get_user_data(user_id):
     conn = get_conn()
-    cursor = conn.execute("SELECT is_banned FROM users WHERE user_id = ?", [user_id])
+    cursor = conn.execute("SELECT * FROM users WHERE user_id = ?", [user_id])
     row = cursor.fetchone()
     conn.close()
-    return row[0] == 1 if row else False
+    return row
+
+def is_user_banned(user_id):
+    row = get_user_data(user_id)
+    return row[3] == 1 if row else False
 
 def ban_user(user_id):
     conn = get_conn()
@@ -53,7 +62,7 @@ def add_user(user_id, referrer_id=None):
     conn = get_conn()
     cursor = conn.execute("SELECT * FROM users WHERE user_id = ?", [user_id])
     if not cursor.fetchone():
-        conn.execute("INSERT INTO users (user_id, balance, referrer_id, is_banned, last_daily, boost_end_time) VALUES (?, ?, ?, 0, 0, 0)", [user_id, 0, referrer_id])
+        conn.execute("INSERT INTO users (user_id, balance, referrer_id, is_banned, last_daily, boost_end_time, last_income_time, skin) VALUES (?, ?, ?, 0, 0, 0, 0, 'blue')", [user_id, 0, referrer_id])
         conn.commit()
     conn.close()
 
@@ -64,18 +73,12 @@ def update_balance(user_id, points):
     conn.close()
 
 def get_balance(user_id):
-    conn = get_conn()
-    cursor = conn.execute("SELECT balance FROM users WHERE user_id = ?", [user_id])
-    row = cursor.fetchone()
-    conn.close()
-    return row[0] if row else 0
+    row = get_user_data(user_id)
+    return row[1] if row else 0
 
 def get_referrer(user_id):
-    conn = get_conn()
-    cursor = conn.execute("SELECT referrer_id FROM users WHERE user_id = ?", [user_id])
-    row = cursor.fetchone()
-    conn.close()
-    return row[0] if row and row[0] else None
+    row = get_user_data(user_id)
+    return row[2] if row and row[2] else None
 
 def get_referrals_count(user_id):
     conn = get_conn()
@@ -85,11 +88,8 @@ def get_referrals_count(user_id):
     return row[0] if row else 0
 
 def get_last_daily(user_id):
-    conn = get_conn()
-    cursor = conn.execute("SELECT last_daily FROM users WHERE user_id = ?", [user_id])
-    row = cursor.fetchone()
-    conn.close()
-    return row[0] if row else 0
+    row = get_user_data(user_id)
+    return row[4] if row else 0
 
 def set_last_daily(user_id, timestamp):
     conn = get_conn()
@@ -98,11 +98,8 @@ def set_last_daily(user_id, timestamp):
     conn.close()
 
 def get_boost_end_time(user_id):
-    conn = get_conn()
-    cursor = conn.execute("SELECT boost_end_time FROM users WHERE user_id = ?", [user_id])
-    row = cursor.fetchone()
-    conn.close()
-    return row[0] if row else 0
+    row = get_user_data(user_id)
+    return row[5] if row else 0
 
 def set_boost_end_time(user_id, timestamp):
     conn = get_conn()
@@ -110,24 +107,13 @@ def set_boost_end_time(user_id, timestamp):
     conn.commit()
     conn.close()
 
-def create_withdrawal(user_id, amount, wallet):
-    conn = get_conn()
-    cursor = conn.execute("INSERT INTO withdrawals (user_id, amount, wallet, timestamp) VALUES (?, ?, ?, ?)", [user_id, amount, wallet, int(time.time())])
-    req_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
-    return req_id
+def get_last_income_time(user_id):
+    row = get_user_data(user_id)
+    return row[6] if row else 0
 
-def get_withdrawal(req_id):
+def set_last_income_time(user_id, timestamp):
     conn = get_conn()
-    cursor = conn.execute("SELECT * FROM withdrawals WHERE id = ?", [req_id])
-    row = cursor.fetchone()
-    conn.close()
-    return row
-
-def update_withdrawal_status(req_id, status):
-    conn = get_conn()
-    conn.execute("UPDATE withdrawals SET status = ? WHERE id = ?", [status, req_id])
+    conn.execute("UPDATE users SET last_income_time = ? WHERE user_id = ?", [timestamp, user_id])
     conn.commit()
     conn.close()
 
@@ -139,6 +125,32 @@ def get_top_players():
     return rows
 
 init_db()
+
+# --- Система Рангов ---
+def get_rank(balance):
+    if balance >= 100000: return "👑 Легенда"
+    elif balance >= 10000: return "💼 Инвестор"
+    elif balance >= 1000: return "⛏ Майнер"
+    else: return "🌱 Новичок"
+
+# --- Пассивный доход (доступен с ранга Инвестор) ---
+def collect_income(user_id):
+    balance = get_balance(user_id)
+    if balance < 10000: # Инвестор
+        return 0, 0
+        
+    last_time = get_last_income_time(user_id)
+    now = int(time.time())
+    time_passed = now - last_time
+    
+    # Доход: 100 SFP в час (считаем за каждые полные 3600 секунд)
+    hours_passed = time_passed // 3600
+    if hours_passed > 0:
+        income = hours_passed * 100
+        update_balance(user_id, income)
+        set_last_income_time(user_id, now)
+        return income, hours_passed
+    return 0, 0
 
 # --- Меню ---
 def get_main_menu():
@@ -174,7 +186,8 @@ def start(m):
 
     add_user(m.from_user.id, referrer_id)
     balance = get_balance(m.from_user.id)
-    bot.send_message(m.chat.id, f"Привет! Это FocusMine.\nТвой баланс: {balance:.1f} SFP", reply_markup=get_main_menu())
+    rank = get_rank(balance)
+    bot.send_message(m.chat.id, f"Привет! Это FocusMine.\nТвой баланс: {balance:.1f} SFP\nТвой ранг: {rank}", reply_markup=get_main_menu())
 
 @bot.message_handler(commands=['admin'])
 def admin_panel(m):
@@ -190,8 +203,14 @@ def callback_profile(call):
     refs = get_referrals_count(user_id)
     boost_time = get_boost_end_time(user_id)
     boost_status = f"Активен (осталось {int((boost_time - time.time()) / 60)} мин.)" if time.time() < boost_time else "Не активен"
+    rank = get_rank(balance)
     
-    text = f"👤 **Профиль**\n\n🆔 ID: `{user_id}`\n💰 Баланс: **{balance:.1f} SFP**\n🤝 Друзей: **{refs}**\n⚡️ Буст: {boost_status}"
+    text = (f"👤 **Профиль**\n\n"
+            f"🆔 ID: `{user_id}`\n"
+            f"🏅 Ранг: **{rank}**\n"
+            f"💰 Баланс: **{balance:.1f} SFP**\n"
+            f"🤝 Друзей: **{refs}**\n"
+            f"⚡️ Буст: {boost_status}")
     bot.send_message(call.message.chat.id, text, parse_mode='Markdown')
 
 # --- Топ игроков ---
@@ -220,9 +239,17 @@ def callback_top(call):
 def callback_shop(call):
     user_id = call.from_user.id
     balance = get_balance(user_id)
-    text = f"🛒 **Магазин**\n\nБаланс: **{balance:.1f} SFP**\n\n⚡️ **Ускоритель x2 (1 час)**\nЦена: **500 SFP**"
+    text = f"🛒 **Магазин**\n\nБаланс: **{balance:.1f} SFP**\n\n"
+    
     markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("Купить за 500 SFP", callback_data="buy_boost"))
+    markup.add(types.InlineKeyboardButton("⚡️ Ускоритель x2 (500 SFP)", callback_data="buy_boost"))
+    
+    # Пассивный доход доступен только Инвесторам
+    if balance >= 10000:
+        markup.add(types.InlineKeyboardButton("🏦 Собрать пассивный доход", callback_data="collect_income"))
+    else:
+        text += "*Пассивный доход доступен с ранга Инвестор (10 000 SFP).*\n"
+        
     markup.add(types.InlineKeyboardButton("⬅️ Назад", callback_data="back_to_menu"))
     bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=markup)
 
@@ -237,9 +264,21 @@ def callback_buy_boost(call):
     else:
         bot.answer_callback_query(call.id, "❌ Недостаточно SFP!", show_alert=True)
 
+@bot.callback_query_handler(func=lambda call: call.data == "collect_income")
+def callback_collect_income(call):
+    user_id = call.from_user.id
+    income, hours = collect_income(user_id)
+    
+    if income > 0:
+        bot.answer_callback_query(call.id, f"💰 Ты получил {income} SFP за {hours} ч.")
+        bot.edit_message_text(f"✅ Доход собран!\nТвой баланс: {get_balance(user_id):.1f} SFP", call.message.chat.id, call.message.message_id)
+    else:
+        bot.answer_callback_query(call.id, "⏳ Ты пока не накопил доход (нужен минимум 1 час).", show_alert=True)
+
 @bot.callback_query_handler(func=lambda call: call.data == "back_to_menu")
 def callback_back(call):
-    bot.edit_message_text(f"Главное меню.\nБаланс: {get_balance(call.from_user.id):.1f} SFP", call.message.chat.id, call.message.message_id, reply_markup=get_main_menu())
+    balance = get_balance(call.from_user.id)
+    bot.edit_message_text(f"Главное меню.\nБаланс: {balance:.1f} SFP", call.message.chat.id, call.message.message_id, reply_markup=get_main_menu())
 
 # --- Ежедневный бонус ---
 @bot.callback_query_handler(func=lambda call: call.data == "daily_reward")
@@ -309,7 +348,7 @@ def callback_admin_action(call):
         bot.edit_message_text(f"❌ Заявка {req_id} отклонена.", call.message.chat.id, call.message.message_id)
         bot.send_message(user_id, f"⚠️ Вывод отклонен. {amount} SFP возвращены.")
 
-# --- ПРИЕМ ДАННЫХ ОТ САЙТА ---
+# --- Прием данных от сайта ---
 @app.route('/claim')
 def claim():
     user_id = request.args.get('user_id')
