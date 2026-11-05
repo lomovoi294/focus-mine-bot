@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Focus Mine</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        /* --- ДИЗАЙН ФОНА --- */
+        body { 
+            margin: 0; 
+            padding: 0; 
+            background-color: #050510; /* Глубокий космос */
+            /* Создаем градиентные пятна и сетку */
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(0, 123, 255, 0.15), transparent 40%),
+                radial-gradient(circle at 85% 30%, rgba(153, 51, 255, 0.15), transparent 40%),
+                linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+            background-size: 100% 100%, 100% 100%, 30px 30px, 30px 30px;
+            color: white; 
+            font-family: 'Montserrat', sans-serif; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            height: 100vh; 
+            overflow: hidden; 
+            user-select: none; 
+        }
+        
+        /* --- КРУГ --- */
+        .circle-container {
+            position: relative;
+            width: 240px; height: 240px;
+            display: flex; align-items: center; justify-content: center;
+            margin-bottom: 30px;
+        }
+
+        .circle { 
+            width: 100%; height: 100%; border-radius: 50%; 
+            background: radial-gradient(circle, #007bff 0%, #001a33 100%); 
+            box-shadow: 0 0 30px #007bff; 
+            transition: all 0.3s ease-in-out;
+            position: relative;
+            z-index: 2;
+        }
+
+        /* Кольцо вокруг круга */
+        .circle::after {
+            content: '';
+            position: absolute;
+            top: -15px; left: -15px; right: -15px; bottom: -15px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-top-color: rgba(255, 255, 255, 0.5);
+            animation: rotate 5s linear infinite;
+        }
+
+        @keyframes rotate { 100% { transform: rotate(360deg); } }
+
+        .pulsing { animation: pulse 2s infinite alternate; }
+        @keyframes pulse { 
+            0% { transform: scale(1); box-shadow: 0 0 20px inherit, 0 0 40px inherit; } 
+            100% { transform: scale(1.05); box-shadow: 0 0 40px inherit, 0 0 80px inherit; } 
+        }
+
+        .timer { 
+            position: absolute;
+            font-size: 48px; font-weight: 700; 
+            text-shadow: 0 2px 10px rgba(0,0,0,0.8);
+            z-index: 10;
+        }
+
+        /* --- ТЕКСТ И КНОПКИ --- */
+        .status-text { 
+            font-size: 14px; color: #8b949e; margin-bottom: 20px; 
+            font-weight: 700; letter-spacing: 2px; text-transform: uppercase; 
+            text-shadow: 0 0 10px rgba(255,255,255,0.2);
+        }
+
+        .btn { 
+            padding: 16px 40px; font-size: 16px; font-weight: 700; color: white; 
+            background: linear-gradient(135deg, #007bff, #0056b3); 
+            border: none; border-radius: 16px; margin-top: 10px; 
+            cursor: pointer; display: none; font-family: 'Montserrat', sans-serif;
+            box-shadow: 0 4px 15px rgba(0, 123, 255, 0.4);
+            transition: transform 0.1s;
+            z-index: 10;
+        }
+        
+        .btn:active { transform: scale(0.95); }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        
+        /* Кнопка "Забрать" */
+        #claimBtn {
+            background: linear-gradient(135deg, #238636, #1f7a30); 
+            box-shadow: 0 4px 15px rgba(35, 134, 54, 0.4);
+        }
+    </style>
+</head>
+<body>
+    <div class="status-text" id="status">Focus Mining</div>
+    
+    <div class="circle-container">
+        <div class="circle" id="circle"></div>
+        <div class="timer" id="timer">0.0s</div>
+    </div>
+    
+    <button class="btn" id="startBtn" style="display: block;">Начать фокус</button>
+    <button class="btn" id="claimBtn">Забрать SFP</button>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+        let isMining = false;
+        let seconds = 0;
+        let timerInterval;
+
+        const circle = document.getElementById('circle');
+        const timerDisplay = document.getElementById('timer');
+        const startBtn = document.getElementById('startBtn');
+        const claimBtn = document.getElementById('claimBtn');
+        const statusText = document.getElementById('status');
+
+        function applySkin(skinName) {
+            const colors = {
+                'blue': { main: '#007bff', dark: '#001a33', shadow: '#007bff' },
+                'red': { main: '#ff3333', dark: '#330000', shadow: '#ff3333' },
+                'green': { main: '#33ff33', dark: '#003300', shadow: '#33ff33' },
+                'purple': { main: '#9933ff', dark: '#1a0033', shadow: '#9933ff' }
+            };
+            const theme = colors[skinName] || colors['blue'];
+            circle.style.background = `radial-gradient(circle, ${theme.main} 0%, ${theme.dark} 100%)`;
+            circle.style.boxShadow = `0 0 30px ${theme.shadow}`;
+            
+            const styleSheet = document.styleSheets[0];
+            const keyframes = `@keyframes pulse { 0% { transform: scale(1); box-shadow: 0 0 20px ${theme.shadow}, 0 0 40px ${theme.shadow}; } 100% { transform: scale(1.05); box-shadow: 0 0 40px ${theme.shadow}, 0 0 80px ${theme.shadow}; } }`;
+            styleSheet.insertRule(keyframes, styleSheet.cssRules.length);
+        }
+
+        if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
+            const userId = tg.initDataUnsafe.user.id;
+            fetch('https://focus-mine-bot.onrender.com/get_skin/' + userId)
+                .then(response => response.text())
+                .then(skinName => {
+                    applySkin(skinName);
+                })
+                .catch(err => console.log('Ошибка загрузки скина:', err));
+        }
+
+        startBtn.onclick = function() {
+            if (isMining) return;
+            isMining = true;
+            seconds = 0;
+            this.style.display = 'none';
+            claimBtn.style.display = 'none';
+            circle.classList.add('pulsing');
+            statusText.innerText = "Удерживай фокус...";
+            
+            timerInterval = setInterval(() => {
+                seconds += 0.1;
+                timerDisplay.innerText = seconds.toFixed(1) + 's';
+                if (seconds > 5) claimBtn.style.display = 'block';
+            }, 100);
+        };
+
+        claimBtn.onclick = function() {
+            if (seconds > 0) {
+                claimBtn.disabled = true;
+                claimBtn.innerText = "Синхронизация...";
+                statusText.innerText = "Отправка на сервер...";
+                
+                const chatId = tg.initDataUnsafe.user.id;
+                const url = 'https://focus-mine-bot.onrender.com/claim?user_id=' + chatId + '&seconds=' + seconds.toFixed(1);
+                
+                fetch(url).catch(e => console.log(e));
+                
+                setTimeout(() => {
+                    tg.close();
+                }, 1000);
+            }
+        };
+
+        document.addEventListener("visibilitychange", () => {
+            if (document.hidden && isMining) {
+                clearInterval(timerInterval);
+                isMining = false;
+                circle.classList.remove('pulsing');
+                startBtn.style.display = 'block';
+                startBtn.innerText = "Продолжить";
+                statusText.innerText = "Фокус потерян";
+            }
+        });
+    </script>
+</body>
+</html>
