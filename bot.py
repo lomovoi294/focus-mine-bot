@@ -24,7 +24,7 @@ def get_conn():
 
 def init_db():
     conn = get_conn()
-    conn.execute("CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY, balance REAL, referrer_id INTEGER, is_banned INTEGER DEFAULT 0, last_daily INTEGER DEFAULT 0, boost_end_time INTEGER DEFAULT 0, last_income_time INTEGER DEFAULT 0, skin TEXT DEFAULT 'blue', nickname TEXT DEFAULT NULL)")
+    conn.execute("CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY, balance REAL, referrer_id INTEGER, is_banned INTEGER DEFAULT 0, last_daily INTEGER DEFAULT 0, boost_end_time INTEGER DEFAULT 0, last_income_time INTEGER DEFAULT 0, skin TEXT DEFAULT 'blue', nickname TEXT DEFAULT NULL, agreed INTEGER DEFAULT 0)")
     try: conn.execute("ALTER TABLE users ADD COLUMN is_banned INTEGER DEFAULT 0")
     except: pass
     try: conn.execute("ALTER TABLE users ADD COLUMN last_daily INTEGER DEFAULT 0")
@@ -36,6 +36,8 @@ def init_db():
     try: conn.execute("ALTER TABLE users ADD COLUMN skin TEXT DEFAULT 'blue'")
     except: pass
     try: conn.execute("ALTER TABLE users ADD COLUMN nickname TEXT DEFAULT NULL")
+    except: pass
+    try: conn.execute("ALTER TABLE users ADD COLUMN agreed INTEGER DEFAULT 0") # НОВАЯ КОЛОНКА
     except: pass
     
     conn.execute("""CREATE TABLE IF NOT EXISTS withdrawals 
@@ -64,9 +66,21 @@ def add_user(user_id, referrer_id=None):
     conn = get_conn()
     cursor = conn.execute("SELECT * FROM users WHERE user_id = ?", [user_id])
     if not cursor.fetchone():
-        conn.execute("INSERT INTO users (user_id, balance, referrer_id, is_banned, last_daily, boost_end_time, last_income_time, skin, nickname) VALUES (?, ?, ?, 0, 0, 0, 0, 'blue', NULL)", [user_id, 0, referrer_id])
+        # При регистрации agreed = 0 (не согласен)
+        conn.execute("INSERT INTO users (user_id, balance, referrer_id, is_banned, last_daily, boost_end_time, last_income_time, skin, nickname, agreed) VALUES (?, ?, ?, 0, 0, 0, 0, 'blue', NULL, 0)", [user_id, 0, referrer_id])
         conn.commit()
     conn.close()
+
+def set_agreed(user_id):
+    conn = get_conn()
+    conn.execute("UPDATE users SET agreed = 1 WHERE user_id = ?", [user_id])
+    conn.commit()
+    conn.close()
+
+def is_agreed(user_id):
+    row = get_user_data(user_id)
+    if not row: return False
+    return row[9] == 1 # Индекс колонки agreed
 
 def update_balance(user_id, points):
     conn = get_conn()
@@ -129,7 +143,6 @@ def set_skin(user_id, skin):
     conn.commit()
     conn.close()
 
-# --- Никнеймы ---
 def get_nickname(user_id):
     row = get_user_data(user_id)
     return row[8] if row and row[8] else None
@@ -230,6 +243,26 @@ def get_main_menu(user_id):
     markup.add(btn_top, btn_invite)
     return markup
 
+# --- Обработка соглашения ---
+@bot.callback_query_handler(func=lambda call: call.data == "agree_terms")
+def callback_agree(call):
+    user_id = call.from_user.id
+    set_agreed(user_id)
+    bot.answer_callback_query(call.id, "✅ Согласие принято!")
+    
+    balance = get_balance(user_id)
+    rank = get_rank(balance)
+    nick = get_nickname(user_id) or "Игрок"
+    
+    text = (
+        f"👋 **Добро пожаловать в FocusMine!**\n\n"
+        f"Твой фокус — твой заработок.\n\n"
+        f"👤 Твой ник: **{nick}**\n"
+        f"🏅 Твой ранг: {rank}\n"
+        f"💰 Твой баланс: **{balance:.1f} SFP**"
+    )
+    bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=get_main_menu(user_id))
+
 # --- Команды ---
 @bot.message_handler(commands=['start'])
 def start(m):
@@ -246,15 +279,31 @@ def start(m):
         except ValueError: pass
 
     add_user(m.from_user.id, referrer_id)
+    
+    # ПРОВЕРКА СОГЛАШЕНИЯ
+    if not is_agreed(m.from_user.id):
+        text = (
+            f"⚖️ **Пользовательское соглашение**\n\n"
+            f"Перед началом игры, пожалуйста, ознакомьтесь с нашими правилами.\n\n"
+            f"Запрещено: использование скриптов для накрутки, создание мультиаккаунтов, мошенничество.\n\n"
+            f"Нажимая кнопку «Согласен», вы подтверждаете, что ознакомились с правилами и принимаете их."
+        )
+        markup = types.InlineKeyboardMarkup(row_width=1)
+        # Ссылка на HTML страницу с правилами
+        markup.add(types.InlineKeyboardButton("📄 Читать правила", url="https://lomovoi294.github.io/focus-mine-bot/terms.html"))
+        markup.add(types.InlineKeyboardButton("✅ Согласен и продолжить", callback_data="agree_terms"))
+        bot.send_message(m.chat.id, text, parse_mode='Markdown', reply_markup=markup)
+        return
+
+    # Если уже согласен — показываем меню
     balance = get_balance(m.from_user.id)
     rank = get_rank(balance)
-    nick = get_nickname(m.from_user.id)
-    display_name = nick if nick else "Игрок"
+    nick = get_nickname(m.from_user.id) or "Игрок"
     
     text = (
         f"👋 **Добро пожаловать в FocusMine!**\n\n"
         f"Твой фокус — твой заработок. Удерживай внимание, майни SFP и приглашай друзей.\n\n"
-        f"👤 Твой ник: **{display_name}**\n"
+        f"👤 Твой ник: **{nick}**\n"
         f"🏅 Твой ранг: {rank}\n"
         f"💰 Твой баланс: **{balance:.1f} SFP**"
     )
@@ -480,81 +529,4 @@ def process_withdraw_amount(m, wallet):
         if admin_id:
             nick = get_nickname(user_id) or f"ID: {user_id}"
             text = (f"🔔 **Заявка #{req_id}**\n"
-                    f"От: {nick} (`{user_id}`)\n"
-                    f"Сумма: **{amount} SFP**\n"
-                    f"К выплате (минус 10%): **{payout:.1f} SFP**\n"
-                    f"Кошелек: `{wallet}`")
-            markup = types.InlineKeyboardMarkup()
-            markup.add(types.InlineKeyboardButton("✅ Выплачено", callback_data=f"approve_{req_id}"))
-            markup.add(types.InlineKeyboardButton("❌ Отклонить", callback_data=f"reject_{req_id}"))
-            bot.send_message(admin_id, text, parse_mode='Markdown', reply_markup=markup)
-    except Exception as e:
-        print(f"Ошибка при выводе: {e}")
-        bot.send_message(m.chat.id, f"❌ Ошибка: {e}")
-
-@bot.callback_query_handler(func=lambda call: call.data.startswith("approve_") or call.data.startswith("reject_"))
-def callback_admin_action(call):
-    if call.from_user.id != admin_id: return
-    action, req_id = call.data.split("_")
-    req = get_withdrawal(int(req_id))
-    if not req or req[4] != 'pending': return
-    user_id, amount = req[1], req[2]
-    if action == "approve":
-        update_withdrawal_status(int(req_id), "approved")
-        bot.edit_message_text(f"✅ Заявка {req_id} одобрена.", call.message.chat.id, call.message.message_id)
-        bot.send_message(user_id, f"🎉 Вывод {amount} SFP одобрен!")
-    else:
-        update_balance(user_id, amount)
-        update_withdrawal_status(int(req_id), "rejected")
-        bot.edit_message_text(f"❌ Заявка {req_id} отклонена.", call.message.chat.id, call.message.message_id)
-        bot.send_message(user_id, f"⚠️ Вывод отклонен. {amount} SFP возвращены.")
-
-# --- Прием данных от сайта ---
-@app.route('/claim')
-def claim():
-    user_id = request.args.get('user_id')
-    seconds = request.args.get('seconds')
-    if user_id and seconds:
-        try:
-            user_id = int(user_id)
-            raw_points = int(float(seconds))
-            if is_user_banned(user_id): return "OK", 200
-            if 0 < raw_points <= 60:
-                is_boosted = time.time() < get_boost_end_time(user_id)
-                final_points = raw_points * 2 if is_boosted else raw_points
-                update_balance(user_id, final_points)
-                boost_text = " (x2)" if is_boosted else ""
-                bot.send_message(user_id, f"✅ Намайнил {final_points} SFP{boost_text}.\nБаланс: {get_balance(user_id):.1f} SFP")
-                referrer = get_referrer(user_id)
-                if referrer and referrer != user_id:
-                    ref_bonus = int(final_points * 0.10)
-                    if ref_bonus > 0:
-                        update_balance(referrer, ref_bonus)
-                        try: bot.send_message(referrer, f"💸 Реферал намайнил {final_points} SFP. Тебе +{ref_bonus} SFP.")
-                        except: pass
-            else:
-                ban_user(user_id)
-        except Exception as e:
-            print(f"Ошибка claim: {e}")
-    return "OK", 200
-
-@app.route('/get_skin/<int:user_id>')
-def get_user_skin_route(user_id):
-    skin = get_skin(user_id)
-    return skin, 200
-
-# --- Webhook ---
-@app.route('/' + t, methods=['POST'])
-def getMessage():
-    json_string = request.get_data().decode('utf-8')
-    update = telebot.types.Update.de_json(json_string)
-    bot.process_new_updates([update])
-    return "!", 200
-
-@app.route("/")
-def webhook():
-    bot.remove_webhook()
-    bot.set_webhook(url=f'https://focus-mine-bot.onrender.com/{t}')
-    return "Webhook установлен!", 200
-
-app.run(host="0.0.0.0", port=int(os.environ.get('PORT', 5000)))
+                    f"От: {nick} (`{
