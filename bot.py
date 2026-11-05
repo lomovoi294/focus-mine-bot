@@ -40,7 +40,6 @@ def init_db():
     conn.commit()
     conn.close()
 
-# (Все функции базы данных остаются без изменений)
 def get_user_data(user_id):
     conn = get_conn()
     cursor = conn.execute("SELECT * FROM users WHERE user_id = ?", [user_id])
@@ -129,7 +128,8 @@ def set_skin(user_id, skin):
 
 def get_top_players():
     conn = get_conn()
-    cursor = conn.execute("SELECT user_id, balance FROM users ORDER BY balance DESC LIMIT 10")
+    # ТЕПЕРЬ БЕРЕМ И СКИН ТОЖЕ
+    cursor = conn.execute("SELECT user_id, balance, skin FROM users ORDER BY balance DESC LIMIT 10")
     rows = cursor.fetchall()
     conn.close()
     return rows
@@ -164,6 +164,10 @@ def get_rank(balance):
     elif balance >= 1000: return "⛏ Майнер"
     else: return "🌱 Новичок"
 
+def get_skin_emoji(skin_code):
+    emojis = {'blue': '🔵', 'red': '🔴', 'green': '🟢', 'purple': '🟣'}
+    return emojis.get(skin_code, '🔵')
+
 def get_skin_name(skin_code):
     names = {'blue': '🔵 Синий', 'red': '🔴 Красный', 'green': '🟢 Зеленый', 'purple': '🟣 Фиолетовый'}
     return names.get(skin_code, '🔵 Синий')
@@ -187,7 +191,7 @@ def collect_income(user_id):
         return income, hours_passed
     return 0, 0
 
-# --- Меню (КРАСИВОЕ) ---
+# --- Меню ---
 def get_main_menu(user_id):
     markup = types.InlineKeyboardMarkup(row_width=2)
     web_app = types.WebAppInfo(url="https://lomovoi294.github.io/focus-mine-bot/warp.html")
@@ -243,16 +247,15 @@ def callback_profile(call):
     boost_time = get_boost_end_time(user_id)
     boost_status = f"Активен (🔥 {int((boost_time - time.time()) / 60)} мин.)" if time.time() < boost_time else "❌ Не активен"
     rank = get_rank(balance)
-    skin_name = get_skin_name(get_skin(user_id))
+    skin_emoji = get_skin_emoji(get_skin(user_id))
     
     text = (
-        f"👤 **Твой профиль**\n"
+        f"👤 **Твой профиль** {skin_emoji}\n"
         f"➖➖➖➖➖➖➖➖➖➖\n"
         f"🆔 ID: `{user_id}`\n"
         f"🏅 Ранг: **{rank}**\n"
         f"💰 Баланс: **{balance:.1f} SFP**\n"
         f"🤝 Друзей: **{refs}**\n"
-        f"🎨 Скин: {skin_name}\n"
         f"⚡️ Буст x2: {boost_status}\n"
         f"➖➖➖➖➖➖➖➖➖➖"
     )
@@ -274,7 +277,7 @@ def callback_invite(call):
     markup.add(types.InlineKeyboardButton("⬅️ В меню", callback_data="back_to_menu"))
     bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=markup)
 
-# --- Топ игроков ---
+# --- Топ игроков (СО СКИНАМИ) ---
 @bot.callback_query_handler(func=lambda call: call.data == "top")
 def callback_top(call):
     top_users = get_top_players()
@@ -284,8 +287,9 @@ def callback_top(call):
     text = "🏆 **Топ-10 игроков FocusMine**\n➖➖➖➖➖➖➖➖➖➖\n"
     medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
     for index, user in enumerate(top_users):
-        user_id, balance = user[0], user[1]
-        name = f"ID: {user_id}"
+        user_id, balance, skin = user[0], user[1], user[2]
+        skin_emoji = get_skin_emoji(skin)
+        name = f"{skin_emoji} ID: {user_id}"
         if user_id == admin_id: name += " 👑"
         text += f"{medals[index]} {name} — **{balance:.1f} SFP**\n"
     markup = types.InlineKeyboardMarkup()
