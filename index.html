@@ -4,20 +4,74 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Focus Mine</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        body { margin: 0; padding: 0; background: #0d1117; color: white; font-family: Arial; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
-        .circle { width: 200px; height: 200px; border-radius: 50%; background: radial-gradient(circle, #007bff 0%, #001a33 100%); box-shadow: 0 0 30px #007bff; margin-bottom: 20px; transition: all 0.3s ease-in-out; }
+        body { margin: 0; padding: 0; background: #09090b; color: white; font-family: 'Montserrat', sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; overflow: hidden; user-select: none; }
+        
+        .circle-container {
+            position: relative;
+            width: 240px; height: 240px;
+            display: flex; align-items: center; justify-content: center;
+            margin-bottom: 30px;
+        }
+
+        .circle { 
+            width: 100%; height: 100%; border-radius: 50%; 
+            background: radial-gradient(circle, #007bff 0%, #001a33 100%); 
+            box-shadow: 0 0 30px #007bff; 
+            transition: all 0.3s ease-in-out;
+            position: relative;
+        }
+
+        .circle::after {
+            content: '';
+            position: absolute;
+            top: -10px; left: -10px; right: -10px; bottom: -10px;
+            border-radius: 50%;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            animation: rotate 10s linear infinite;
+        }
+
+        @keyframes rotate { 100% { transform: rotate(360deg); } }
+
         .pulsing { animation: pulse 2s infinite alternate; }
-        @keyframes pulse { 0% { transform: scale(1); box-shadow: 0 0 20px inherit, 0 0 40px inherit; } 100% { transform: scale(1.1); box-shadow: 0 0 40px inherit, 0 0 80px inherit; } }
-        .timer { font-size: 40px; font-weight: bold; margin-bottom: 20px; }
-        .btn { padding: 15px 30px; font-size: 18px; color: white; background: #238636; border: none; border-radius: 10px; margin-top: 10px; cursor: pointer; display: none; }
+        @keyframes pulse { 
+            0% { transform: scale(1); box-shadow: 0 0 20px inherit, 0 0 40px inherit; } 
+            100% { transform: scale(1.05); box-shadow: 0 0 40px inherit, 0 0 80px inherit; } 
+        }
+
+        .timer { 
+            position: absolute;
+            font-size: 48px; font-weight: 700; 
+            text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+            z-index: 10;
+        }
+
+        .status-text { font-size: 14px; color: #888; margin-bottom: 20px; font-weight: 400; letter-spacing: 1px; text-transform: uppercase; }
+
+        .btn { 
+            padding: 16px 40px; font-size: 16px; font-weight: 700; color: white; 
+            background: linear-gradient(135deg, #238636, #1f7a30); 
+            border: none; border-radius: 16px; margin-top: 10px; 
+            cursor: pointer; display: none; font-family: 'Montserrat', sans-serif;
+            box-shadow: 0 4px 15px rgba(35, 134, 54, 0.4);
+            transition: transform 0.1s;
+        }
+        
+        .btn:active { transform: scale(0.95); }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; }
     </style>
 </head>
 <body>
-    <div class="circle" id="circle"></div>
-    <div class="timer" id="timer">0.0s</div>
-    <button class="btn" id="startBtn" style="display: block; background: #007bff;">Начать фокус</button>
+    <div class="status-text" id="status">Focus Mining</div>
+    
+    <div class="circle-container">
+        <div class="circle" id="circle"></div>
+        <div class="timer" id="timer">0.0s</div>
+    </div>
+    
+    <button class="btn" id="startBtn" style="display: block;">Начать фокус</button>
     <button class="btn" id="claimBtn">Забрать SFP</button>
 
     <script>
@@ -31,6 +85,7 @@
         const timerDisplay = document.getElementById('timer');
         const startBtn = document.getElementById('startBtn');
         const claimBtn = document.getElementById('claimBtn');
+        const statusText = document.getElementById('status');
 
         function applySkin(skinName) {
             const colors = {
@@ -44,7 +99,7 @@
             circle.style.boxShadow = `0 0 30px ${theme.shadow}`;
             
             const styleSheet = document.styleSheets[0];
-            const keyframes = `@keyframes pulse { 0% { transform: scale(1); box-shadow: 0 0 20px ${theme.shadow}, 0 0 40px ${theme.shadow}; } 100% { transform: scale(1.1); box-shadow: 0 0 40px ${theme.shadow}, 0 0 80px ${theme.shadow}; } }`;
+            const keyframes = `@keyframes pulse { 0% { transform: scale(1); box-shadow: 0 0 20px ${theme.shadow}, 0 0 40px ${theme.shadow}; } 100% { transform: scale(1.05); box-shadow: 0 0 40px ${theme.shadow}, 0 0 80px ${theme.shadow}; } }`;
             styleSheet.insertRule(keyframes, styleSheet.cssRules.length);
         }
 
@@ -65,6 +120,7 @@
             this.style.display = 'none';
             claimBtn.style.display = 'none';
             circle.classList.add('pulsing');
+            statusText.innerText = "Удерживай фокус...";
             
             timerInterval = setInterval(() => {
                 seconds += 0.1;
@@ -76,7 +132,8 @@
         claimBtn.onclick = function() {
             if (seconds > 0) {
                 claimBtn.disabled = true;
-                claimBtn.innerText = "Отправка...";
+                claimBtn.innerText = "Синхронизация...";
+                statusText.innerText = "Отправка на сервер...";
                 
                 const chatId = tg.initDataUnsafe.user.id;
                 const url = 'https://focus-mine-bot.onrender.com/claim?user_id=' + chatId + '&seconds=' + seconds.toFixed(1);
@@ -95,7 +152,8 @@
                 isMining = false;
                 circle.classList.remove('pulsing');
                 startBtn.style.display = 'block';
-                startBtn.innerText = "Попробовать снова";
+                startBtn.innerText = "Продолжить";
+                statusText.innerText = "Фокус потерян";
             }
         });
     </script>
