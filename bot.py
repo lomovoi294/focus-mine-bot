@@ -182,7 +182,7 @@ def callback_profile(call):
     boost_time = get_boost_end_time(user_id)
     boost_status = f"Активен (осталось {int((boost_time - time.time()) / 60)} мин.)" if time.time() < boost_time else "Не активен"
     
-    text = f"👤 Профиль\n\n🆔 ID: {user_id}\n💰 Баланс: {balance:.1f} SFP\n🤝 Друзей: {refs}\n⚡️ Буст: {boost_status}"
+    text = f"👤 **Профиль**\n\n🆔 ID: `{user_id}`\n💰 Баланс: **{balance:.1f} SFP**\n🤝 Друзей: **{refs}**\n⚡️ Буст: {boost_status}"
     bot.send_message(call.message.chat.id, text, parse_mode='Markdown')
 
 # --- Магазин ---
@@ -190,7 +190,7 @@ def callback_profile(call):
 def callback_shop(call):
     user_id = call.from_user.id
     balance = get_balance(user_id)
-    text = f"🛒 Магазин\n\nБаланс: {balance:.1f} SFP\n\n⚡️ Ускоритель x2 (1 час)\nЦена: 500 SFP"
+    text = f"🛒 **Магазин**\n\nБаланс: **{balance:.1f} SFP**\n\n⚡️ **Ускоритель x2 (1 час)**\nЦена: **500 SFP**"
     markup = types.InlineKeyboardMarkup()
     markup.add(types.InlineKeyboardButton("Купить за 500 SFP", callback_data="buy_boost"))
     markup.add(types.InlineKeyboardButton("⬅️ Назад", callback_data="back_to_menu"))
@@ -252,7 +252,7 @@ def process_withdraw_amount(m, wallet):
         bot.send_message(m.chat.id, f"✅ Заявка на {amount} SFP создана! Ожидай.")
         
         if admin_id:
-            text = f"🔔 Заявка #{req_id}\nОт: {user_id}\nСумма: {amount} SFP\nКошелек: {wallet}"
+            text = f"🔔 **Заявка #{req_id}**\nОт: `{user_id}`\nСумма: **{amount} SFP**\nКошелек: `{wallet}`"
             markup = types.InlineKeyboardMarkup()
             markup.add(types.InlineKeyboardButton("✅ Выплачено", callback_data=f"approve_{req_id}"))
             markup.add(types.InlineKeyboardButton("❌ Отклонить", callback_data=f"reject_{req_id}"))
@@ -311,32 +311,7 @@ def claim():
                             pass
             else:
                 ban_user(user_id)
-        except Exception as e:
-            print(f"Ошибка claim: {e}")
-            
-        if is_user_banned(user_id):        
-            return "OK", 200
-        
-        if 0 < raw_points <= 60:
-            is_boosted = time.time() < get_boost_end_time(user_id)
-            final_points = raw_points * 2 if is_boosted else raw_points
-        
-            update_balance(user_id, final_points)
-            boost_text = " (x2)" if is_boosted else ""
-            bot.send_message(user_id, f"✅ Намайнил {final_points} SFP{boost_text}.\nБаланс: {get_balance(user_id):.1f} SFP")
                 
-            referrer = get_referrer(user_id)
-            if referrer and referrer != user_id:
-                ref_bonus = int(final_points * 0.10)
-                if ref_bonus > 0:
-                    update_balance(referrer, ref_bonus)
-                    try: 
-                        bot.send_message(referrer, f"💸 Реферал намайнил {final_points} SFP. Тебе +{ref_bonus} SFP.")
-                    except:
-                        pass
-        else:
-            ban_user(user_id)
-            
         except Exception as e:
             print(f"Ошибка claim: {e}")
             
