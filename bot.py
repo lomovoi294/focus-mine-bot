@@ -24,7 +24,6 @@ def get_conn():
 def init_db():
     conn = get_conn()
     conn.execute("CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY, balance REAL, referrer_id INTEGER, is_banned INTEGER DEFAULT 0, last_daily INTEGER DEFAULT 0, boost_end_time INTEGER DEFAULT 0, last_income_time INTEGER DEFAULT 0, skin TEXT DEFAULT 'blue')")
-    # Безопасное добавление новых колонок
     try: conn.execute("ALTER TABLE users ADD COLUMN is_banned INTEGER DEFAULT 0")
     except: pass
     try: conn.execute("ALTER TABLE users ADD COLUMN last_daily INTEGER DEFAULT 0")
@@ -157,20 +156,18 @@ def get_rank(balance):
 # --- Пассивный доход (доступен с ранга Инвестор) ---
 def collect_income(user_id):
     balance = get_balance(user_id)
-    if balance < 10000: # Инвестор
+    if balance < 10000:
         return 0, 0
         
     last_time = get_last_income_time(user_id)
     now = int(time.time())
     
-    # Если это первый сбор, просто записываем время и ничего не начисляем
     if last_time == 0:
         set_last_income_time(user_id, now)
         return 0, 0
         
     time_passed = now - last_time
     
-    # ОГРАНИЧЕНИЕ: начисляем максимум за 24 часа (86400 секунд)
     if time_passed > 86400:
         time_passed = 86400
         
@@ -276,7 +273,6 @@ def callback_shop(call):
     markup = types.InlineKeyboardMarkup()
     markup.add(types.InlineKeyboardButton("⚡️ Ускоритель x2 (500 SFP)", callback_data="buy_boost"))
     
-    # Пассивный доход доступен только Инвесторам
     if balance >= 10000:
         markup.add(types.InlineKeyboardButton("🏦 Собрать пассивный доход", callback_data="collect_income"))
     else:
@@ -327,7 +323,7 @@ def callback_daily(call):
         rem = 86400 - (now - get_last_daily(user_id))
         bot.answer_callback_query(call.id, f"⏳ Жди еще {rem // 3600} ч. {(rem % 3600) // 60} мин.", show_alert=True)
 
-# --- Вывод ---
+# --- Вывод (С КОМИССИЕЙ 10%) ---
 @bot.callback_query_handler(func=lambda call: call.data == "withdraw")
 def callback_withdraw(call):
     user_id = call.from_user.id
@@ -348,16 +344,26 @@ def process_withdraw_amount(m, wallet):
         if amount < 1000 or amount > get_balance(user_id):
             bot.send_message(m.chat.id, "❌ Неверная сумма.")
             return
+            
         update_balance(user_id, -amount)
         req_id = create_withdrawal(user_id, amount, wallet)
-        bot.send_message(m.chat.id, f"✅ Заявка на {amount} SFP создана! Ожидай.")
+        
+        fee = amount * 0.10
+        payout = amount - fee
+        
+        bot.send_message(m.chat.id, f"✅ Заявка на {amount} SFP создана!\n(Комиссия 10%: {fee:.1f} SFP)\nК получению: {payout:.1f} SFP. Ожидай.")
         
         if admin_id:
-            text = f"🔔 **Заявка #{req_id}**\nОт: `{user_id}`\nСумма: **{amount} SFP**\nКошелек: `{wallet}`"
+            text = (f"🔔 **Заявка #{req_id}**\n"
+                    f"От: `{user_id}`\n"
+                    f"Сумма: **{amount} SFP**\n"
+                    f"К выплате (минус 10%): **{payout:.1f} SFP**\n"
+                    f"Кошелек: `{wallet}`")
             markup = types.InlineKeyboardMarkup()
             markup.add(types.InlineKeyboardButton("✅ Выплачено", callback_data=f"approve_{req_id}"))
             markup.add(types.InlineKeyboardButton("❌ Отклонить", callback_data=f"reject_{req_id}"))
             bot.send_message(admin_id, text, parse_mode='Markdown', reply_markup=markup)
+            
     except Exception as e:
         print(f"Ошибка при выводе: {e}")
         bot.send_message(m.chat.id, f"❌ Ошибка: {e}")
