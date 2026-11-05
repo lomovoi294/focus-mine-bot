@@ -40,6 +40,7 @@ def init_db():
     conn.commit()
     conn.close()
 
+# (Все функции базы данных остаются без изменений)
 def get_user_data(user_id):
     conn = get_conn()
     cursor = conn.execute("SELECT * FROM users WHERE user_id = ?", [user_id])
@@ -163,6 +164,10 @@ def get_rank(balance):
     elif balance >= 1000: return "⛏ Майнер"
     else: return "🌱 Новичок"
 
+def get_skin_name(skin_code):
+    names = {'blue': '🔵 Синий', 'red': '🔴 Красный', 'green': '🟢 Зеленый', 'purple': '🟣 Фиолетовый'}
+    return names.get(skin_code, '🔵 Синий')
+
 # --- Пассивный доход ---
 def collect_income(user_id):
     balance = get_balance(user_id)
@@ -182,28 +187,30 @@ def collect_income(user_id):
         return income, hours_passed
     return 0, 0
 
-# --- Меню ---
+# --- Меню (КРАСИВОЕ) ---
 def get_main_menu(user_id):
-    markup = types.InlineKeyboardMarkup()
+    markup = types.InlineKeyboardMarkup(row_width=2)
     web_app = types.WebAppInfo(url="https://lomovoi294.github.io/focus-mine-bot/")
-    btn_mine = types.InlineKeyboardButton("Шахта 🟢", web_app=web_app)
-    btn_daily = types.InlineKeyboardButton("🎁 Ежедневный бонус", callback_data="daily_reward")
-    btn_profile = types.InlineKeyboardButton("👤 Мой профиль", callback_data="profile")
+    
+    btn_mine = types.InlineKeyboardButton("🚀 Войти в Шахту", web_app=web_app)
+    btn_daily = types.InlineKeyboardButton("🎁 Бонус", callback_data="daily_reward")
+    btn_profile = types.InlineKeyboardButton("👤 Профиль", callback_data="profile")
     btn_shop = types.InlineKeyboardButton("🛒 Магазин", callback_data="shop")
-    btn_withdraw = types.InlineKeyboardButton("💸 Вывести SFP", callback_data="withdraw")
-    btn_top = types.InlineKeyboardButton("🏆 Топ игроков", callback_data="top")
+    btn_withdraw = types.InlineKeyboardButton("💸 Вывод", callback_data="withdraw")
+    btn_top = types.InlineKeyboardButton("🏆 Топ", callback_data="top")
+    btn_invite = types.InlineKeyboardButton("🤝 Пригласить друга", callback_data="invite")
     
     markup.add(btn_mine)
     markup.add(btn_daily, btn_profile)
     markup.add(btn_shop, btn_withdraw)
-    markup.add(btn_top)
+    markup.add(btn_top, btn_invite)
     return markup
 
 # --- Команды ---
 @bot.message_handler(commands=['start'])
 def start(m):
     if is_user_banned(m.from_user.id):
-        bot.send_message(m.chat.id, "⛔ Твой аккаунт заблокирован. Доступ закрыт.")
+        bot.send_message(m.chat.id, "⛔ Твой аккаунт заблокирован за нарушение правил.")
         return
 
     args = m.text.split()
@@ -217,12 +224,14 @@ def start(m):
     add_user(m.from_user.id, referrer_id)
     balance = get_balance(m.from_user.id)
     rank = get_rank(balance)
-    bot.send_message(m.chat.id, f"Привет! Это FocusMine.\nТвой баланс: {balance:.1f} SFP\nТвой ранг: {rank}", reply_markup=get_main_menu(m.from_user.id))
-
-@bot.message_handler(commands=['admin'])
-def admin_panel(m):
-    if m.from_user.id != admin_id: return
-    bot.send_message(m.chat.id, "🛠 Админ-панель активна.")
+    
+    text = (
+        f"👋 **Добро пожаловать в FocusMine!**\n\n"
+        f"Твой фокус — твой заработок. Удерживай внимание, майни SFP и приглашай друзей.\n\n"
+        f"🏅 Твой ранг: {rank}\n"
+        f"💰 Твой баланс: **{balance:.1f} SFP**"
+    )
+    bot.send_message(m.chat.id, text, parse_mode='Markdown', reply_markup=get_main_menu(m.from_user.id))
 
 # --- Профиль ---
 @bot.callback_query_handler(func=lambda call: call.data == "profile")
@@ -232,16 +241,38 @@ def callback_profile(call):
     balance = get_balance(user_id)
     refs = get_referrals_count(user_id)
     boost_time = get_boost_end_time(user_id)
-    boost_status = f"Активен (осталось {int((boost_time - time.time()) / 60)} мин.)" if time.time() < boost_time else "Не активен"
+    boost_status = f"Активен (🔥 {int((boost_time - time.time()) / 60)} мин.)" if time.time() < boost_time else "❌ Не активен"
     rank = get_rank(balance)
+    skin_name = get_skin_name(get_skin(user_id))
     
-    text = (f"👤 **Профиль**\n\n"
-            f"🆔 ID: `{user_id}`\n"
-            f"🏅 Ранг: **{rank}**\n"
-            f"💰 Баланс: **{balance:.1f} SFP**\n"
-            f"🤝 Друзей: **{refs}**\n"
-            f"⚡️ Буст: {boost_status}")
-    bot.send_message(call.message.chat.id, text, parse_mode='Markdown')
+    text = (
+        f"👤 **Твой профиль**\n"
+        f"➖➖➖➖➖➖➖➖➖➖\n"
+        f"🆔 ID: `{user_id}`\n"
+        f"🏅 Ранг: **{rank}**\n"
+        f"💰 Баланс: **{balance:.1f} SFP**\n"
+        f"🤝 Друзей: **{refs}**\n"
+        f"🎨 Скин: {skin_name}\n"
+        f"⚡️ Буст x2: {boost_status}\n"
+        f"➖➖➖➖➖➖➖➖➖➖"
+    )
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton("⬅️ В меню", callback_data="back_to_menu"))
+    bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=markup)
+
+# --- Приглашение ---
+@bot.callback_query_handler(func=lambda call: call.data == "invite")
+def callback_invite(call):
+    u = bot.get_me().username
+    link = f"https://t.me/{u}?start={call.from_user.id}"
+    text = (
+        f"🤝 **Реферальная система**\n\n"
+        f"Приглашай друзей и получай **10%** от их добычи SFP навсегда!\n\n"
+        f"Твоя ссылка:\n`{link}`"
+    )
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton("⬅️ В меню", callback_data="back_to_menu"))
+    bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=markup)
 
 # --- Топ игроков ---
 @bot.callback_query_handler(func=lambda call: call.data == "top")
@@ -250,15 +281,15 @@ def callback_top(call):
     if not top_users:
         bot.answer_callback_query(call.id, "Пока нет игроков.")
         return
-    text = "🏆 **Топ-10 игроков FocusMine**\n\n"
+    text = "🏆 **Топ-10 игроков FocusMine**\n➖➖➖➖➖➖➖➖➖➖\n"
     medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
     for index, user in enumerate(top_users):
         user_id, balance = user[0], user[1]
         name = f"ID: {user_id}"
-        if user_id == admin_id: name += " (Вы)"
+        if user_id == admin_id: name += " 👑"
         text += f"{medals[index]} {name} — **{balance:.1f} SFP**\n"
     markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("⬅️ Назад", callback_data="back_to_menu"))
+    markup.add(types.InlineKeyboardButton("⬅️ В меню", callback_data="back_to_menu"))
     bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=markup)
 
 # --- Магазин ---
@@ -268,25 +299,34 @@ def callback_shop(call):
     balance = get_balance(user_id)
     current_skin = get_skin(user_id)
     
-    text = (f"🛒 **Магазин**\n\n"
-            f"Баланс: **{balance:.1f} SFP**\n"
-            f"Текущий скин: `{current_skin}`\n\n"
-            f"⚡️ **Ускоритель x2 (1 час)** — 500 SFP\n"
-            f"🎨 **Скины для круга (навсегда):**\n"
-            f"🔴 Красный неон — 2000 SFP\n"
-            f"🟢 Зеленый неон — 2000 SFP\n"
-            f"🟣 Фиолетовый неон — 3000 SFP\n")
+    text = (
+        f"🛒 **Магазин FocusMine**\n"
+        f"➖➖➖➖➖➖➖➖➖➖\n"
+        f"💰 Баланс: **{balance:.1f} SFP**\n"
+        f"🎨 Текущий скин: {get_skin_name(current_skin)}\n"
+        f"➖➖➖➖➖➖➖➖➖➖\n"
+        f"⚡️ **Ускоритель x2 (1 час)**\n"
+        f"Цена: 500 SFP\n\n"
+        f"🎨 **Скины (навсегда):**\n"
+        f"🔴 Красный — 2000 SFP\n"
+        f"🟢 Зеленый — 2000 SFP\n"
+        f"🟣 Фиолетовый — 3000 SFP\n"
+    )
     
-    markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("⚡️ Купить Буст (500 SFP)", callback_data="buy_boost"))
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    markup.add(types.InlineKeyboardButton("⚡️ Купить Буст (500)", callback_data="buy_boost"))
     
     if balance >= 10000:
-        markup.add(types.InlineKeyboardButton("🏦 Собрать пассивный доход", callback_data="collect_income"))
+        markup.add(types.InlineKeyboardButton("🏦 Собрать доход", callback_data="collect_income"))
         
     markup.add(types.InlineKeyboardButton("🔴 Купить Красный (2000)", callback_data="buy_skin_red"))
     markup.add(types.InlineKeyboardButton("🟢 Купить Зеленый (2000)", callback_data="buy_skin_green"))
     markup.add(types.InlineKeyboardButton("🟣 Купить Фиолетовый (3000)", callback_data="buy_skin_purple"))
-    markup.add(types.InlineKeyboardButton("⬅️ Назад", callback_data="back_to_menu"))
+    
+    if current_skin != 'blue':
+        markup.add(types.InlineKeyboardButton("🔵 Снять скин (Бесплатно)", callback_data="remove_skin"))
+        
+    markup.add(types.InlineKeyboardButton("⬅️ В меню", callback_data="back_to_menu"))
     
     bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=markup)
 
@@ -297,7 +337,7 @@ def callback_buy_boost(call):
         update_balance(user_id, -500)
         set_boost_end_time(user_id, int(time.time()) + 3600)
         bot.answer_callback_query(call.id, "🔥 Буст активирован!")
-        bot.edit_message_text(f"✅ Успешно! Буст x2 активирован.\nБаланс: {get_balance(user_id):.1f} SFP", call.message.chat.id, call.message.message_id)
+        callback_shop(call)
     else:
         bot.answer_callback_query(call.id, "❌ Недостаточно SFP!", show_alert=True)
 
@@ -307,11 +347,10 @@ def callback_collect_income(call):
     income, hours = collect_income(user_id)
     if income > 0:
         bot.answer_callback_query(call.id, f"💰 Ты получил {income} SFP за {hours} ч.")
-        bot.edit_message_text(f"✅ Доход собран!\nТвой баланс: {get_balance(user_id):.1f} SFP", call.message.chat.id, call.message.message_id)
+        callback_shop(call)
     else:
         bot.answer_callback_query(call.id, "⏳ Ты пока не накопил доход (нужен минимум 1 час).", show_alert=True)
 
-# --- Покупка скинов ---
 @bot.callback_query_handler(func=lambda call: call.data.startswith("buy_skin_"))
 def callback_buy_skin(call):
     user_id = call.from_user.id
@@ -331,10 +370,19 @@ def callback_buy_skin(call):
     else:
         bot.answer_callback_query(call.id, f"❌ Нужно {price} SFP!", show_alert=True)
 
+@bot.callback_query_handler(func=lambda call: call.data == "remove_skin")
+def callback_remove_skin(call):
+    user_id = call.from_user.id
+    set_skin(user_id, 'blue')
+    bot.answer_callback_query(call.id, "🔵 Скин снят. Вернули стандартный цвет.")
+    callback_shop(call)
+
 @bot.callback_query_handler(func=lambda call: call.data == "back_to_menu")
 def callback_back(call):
     balance = get_balance(call.from_user.id)
-    bot.edit_message_text(f"Главное меню.\nБаланс: {balance:.1f} SFP", call.message.chat.id, call.message.message_id, reply_markup=get_main_menu(call.from_user.id))
+    rank = get_rank(balance)
+    text = f"🏠 **Главное меню**\n\n💰 Баланс: **{balance:.1f} SFP**\n🏅 Ранг: {rank}"
+    bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=get_main_menu(call.from_user.id))
 
 # --- Ежедневный бонус ---
 @bot.callback_query_handler(func=lambda call: call.data == "daily_reward")
@@ -351,7 +399,7 @@ def callback_daily(call):
         rem = 86400 - (now - get_last_daily(user_id))
         bot.answer_callback_query(call.id, f"⏳ Жди еще {rem // 3600} ч. {(rem % 3600) // 60} мин.", show_alert=True)
 
-# --- Вывод (С КОМИССИЕЙ) ---
+# --- Вывод ---
 @bot.callback_query_handler(func=lambda call: call.data == "withdraw")
 def callback_withdraw(call):
     user_id = call.from_user.id
@@ -437,7 +485,6 @@ def claim():
             print(f"Ошибка claim: {e}")
     return "OK", 200
 
-# --- НОВЫЙ МАРШРУТ ДЛЯ СКИНОВ ---
 @app.route('/get_skin/<int:user_id>')
 def get_user_skin_route(user_id):
     skin = get_skin(user_id)
