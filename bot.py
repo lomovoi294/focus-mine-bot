@@ -131,6 +131,13 @@ def update_withdrawal_status(req_id, status):
     conn.commit()
     conn.close()
 
+def get_top_players():
+    conn = get_conn()
+    cursor = conn.execute("SELECT user_id, balance FROM users ORDER BY balance DESC LIMIT 10")
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
+
 init_db()
 
 # --- Меню ---
@@ -142,10 +149,12 @@ def get_main_menu():
     btn_profile = types.InlineKeyboardButton("👤 Мой профиль", callback_data="profile")
     btn_shop = types.InlineKeyboardButton("🛒 Магазин", callback_data="shop")
     btn_withdraw = types.InlineKeyboardButton("💸 Вывести SFP", callback_data="withdraw")
+    btn_top = types.InlineKeyboardButton("🏆 Топ игроков", callback_data="top")
     
     markup.add(btn_mine)
     markup.add(btn_daily, btn_profile)
     markup.add(btn_shop, btn_withdraw)
+    markup.add(btn_top)
     return markup
 
 # --- Команды ---
@@ -184,6 +193,27 @@ def callback_profile(call):
     
     text = f"👤 **Профиль**\n\n🆔 ID: `{user_id}`\n💰 Баланс: **{balance:.1f} SFP**\n🤝 Друзей: **{refs}**\n⚡️ Буст: {boost_status}"
     bot.send_message(call.message.chat.id, text, parse_mode='Markdown')
+
+# --- Топ игроков ---
+@bot.callback_query_handler(func=lambda call: call.data == "top")
+def callback_top(call):
+    top_users = get_top_players()
+    if not top_users:
+        bot.answer_callback_query(call.id, "Пока нет игроков.")
+        return
+        
+    text = "🏆 **Топ-10 игроков FocusMine**\n\n"
+    medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
+    
+    for index, user in enumerate(top_users):
+        user_id, balance = user[0], user[1]
+        name = f"ID: {user_id}"
+        if user_id == admin_id: name += " (Вы)"
+        text += f"{medals[index]} {name} — **{balance:.1f} SFP**\n"
+        
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton("⬅️ Назад", callback_data="back_to_menu"))
+    bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=markup)
 
 # --- Магазин ---
 @bot.callback_query_handler(func=lambda call: call.data == "shop")
@@ -257,8 +287,9 @@ def process_withdraw_amount(m, wallet):
             markup.add(types.InlineKeyboardButton("✅ Выплачено", callback_data=f"approve_{req_id}"))
             markup.add(types.InlineKeyboardButton("❌ Отклонить", callback_data=f"reject_{req_id}"))
             bot.send_message(admin_id, text, parse_mode='Markdown', reply_markup=markup)
-    except ValueError:
-        bot.send_message(m.chat.id, "❌ Введи число.")
+    except Exception as e:
+        print(f"Ошибка при выводе: {e}")
+        bot.send_message(m.chat.id, f"❌ Ошибка: {e}")
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("approve_") or call.data.startswith("reject_"))
 def callback_admin_action(call):
