@@ -49,18 +49,22 @@
 
         claimBtn.onclick = function() {
             if (seconds > 0) {
+                // Блокируем кнопку, чтобы не нажать дважды
                 claimBtn.disabled = true;
                 claimBtn.innerText = "Отправка...";
                 
-                try {
-                    // Отправляем данные через Telegram API
-                    tg.sendData(JSON.stringify({ seconds: seconds.toFixed(1) }));
-                    // Окно закроется автоматически силами Telegram
-                } catch (e) {
-                    alert("Ошибка: " + e);
-                    claimBtn.disabled = false;
-                    claimBtn.innerText = "Забрать SFP";
-                }
+                const chatId = tg.initDataUnsafe.user.id;
+                const url = 'https://focus-mine-bot.onrender.com/claim?user_id=' + chatId + '&seconds=' + seconds.toFixed(1);
+                
+                // Отправляем запрос
+                fetch(url)
+                    .then(() => {
+                        tg.close(); // Закрываем окно только после успешной отправки
+                    })
+                    .catch(e => {
+                        // Если ошибка (например, нет интернета), закрываем окно на всякий случай, чтобы не висело
+                        tg.close();
+                    });
             }
         };
 
