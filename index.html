@@ -7,8 +7,30 @@
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        body { margin: 0; padding: 0; background: #09090b; color: white; font-family: 'Montserrat', sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; overflow: hidden; user-select: none; }
+        /* --- ДИЗАЙН ФОНА --- */
+        body { 
+            margin: 0; 
+            padding: 0; 
+            background-color: #050510; /* Глубокий космос */
+            /* Создаем градиентные пятна и сетку */
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(0, 123, 255, 0.15), transparent 40%),
+                radial-gradient(circle at 85% 30%, rgba(153, 51, 255, 0.15), transparent 40%),
+                linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+            background-size: 100% 100%, 100% 100%, 30px 30px, 30px 30px;
+            color: white; 
+            font-family: 'Montserrat', sans-serif; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            height: 100vh; 
+            overflow: hidden; 
+            user-select: none; 
+        }
         
+        /* --- КРУГ --- */
         .circle-container {
             position: relative;
             width: 240px; height: 240px;
@@ -22,15 +44,18 @@
             box-shadow: 0 0 30px #007bff; 
             transition: all 0.3s ease-in-out;
             position: relative;
+            z-index: 2;
         }
 
+        /* Кольцо вокруг круга */
         .circle::after {
             content: '';
             position: absolute;
-            top: -10px; left: -10px; right: -10px; bottom: -10px;
+            top: -15px; left: -15px; right: -15px; bottom: -15px;
             border-radius: 50%;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            animation: rotate 10s linear infinite;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-top-color: rgba(255, 255, 255, 0.5);
+            animation: rotate 5s linear infinite;
         }
 
         @keyframes rotate { 100% { transform: rotate(360deg); } }
@@ -44,23 +69,35 @@
         .timer { 
             position: absolute;
             font-size: 48px; font-weight: 700; 
-            text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+            text-shadow: 0 2px 10px rgba(0,0,0,0.8);
             z-index: 10;
         }
 
-        .status-text { font-size: 14px; color: #888; margin-bottom: 20px; font-weight: 400; letter-spacing: 1px; text-transform: uppercase; }
+        /* --- ТЕКСТ И КНОПКИ --- */
+        .status-text { 
+            font-size: 14px; color: #8b949e; margin-bottom: 20px; 
+            font-weight: 700; letter-spacing: 2px; text-transform: uppercase; 
+            text-shadow: 0 0 10px rgba(255,255,255,0.2);
+        }
 
         .btn { 
             padding: 16px 40px; font-size: 16px; font-weight: 700; color: white; 
-            background: linear-gradient(135deg, #238636, #1f7a30); 
+            background: linear-gradient(135deg, #007bff, #0056b3); 
             border: none; border-radius: 16px; margin-top: 10px; 
             cursor: pointer; display: none; font-family: 'Montserrat', sans-serif;
-            box-shadow: 0 4px 15px rgba(35, 134, 54, 0.4);
+            box-shadow: 0 4px 15px rgba(0, 123, 255, 0.4);
             transition: transform 0.1s;
+            z-index: 10;
         }
         
         .btn:active { transform: scale(0.95); }
         .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        
+        /* Кнопка "Забрать" */
+        #claimBtn {
+            background: linear-gradient(135deg, #238636, #1f7a30); 
+            box-shadow: 0 4px 15px rgba(35, 134, 54, 0.4);
+        }
     </style>
 </head>
 <body>
