@@ -7,55 +7,63 @@
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        /* --- ДИЗАЙН ФОНА --- */
         body { 
-            margin: 0; 
-            padding: 0; 
-            background-color: #050510; /* Глубокий космос */
-            /* Создаем градиентные пятна и сетку */
-            background-image: 
-                radial-gradient(circle at 15% 50%, rgba(0, 123, 255, 0.15), transparent 40%),
-                radial-gradient(circle at 85% 30%, rgba(153, 51, 255, 0.15), transparent 40%),
-                linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-            background-size: 100% 100%, 100% 100%, 30px 30px, 30px 30px;
-            color: white; 
-            font-family: 'Montserrat', sans-serif; 
-            display: flex; 
-            flex-direction: column; 
-            align-items: center; 
-            justify-content: center; 
-            height: 100vh; 
-            overflow: hidden; 
-            user-select: none; 
+            margin: 0; padding: 0; 
+            background-color: #020205; /* Глубокий черный */
+            color: white; font-family: 'Montserrat', sans-serif; 
+            display: flex; flex-direction: column; align-items: center; justify-content: center; 
+            height: 100vh; overflow: hidden; user-select: none; 
+        }
+
+        /* --- ЭФФЕКТ ЗВЕЗДНОГО ДОЖДЯ --- */
+        #stars-container {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            overflow: hidden; z-index: 0;
         }
         
+        .star {
+            position: absolute;
+            background: white;
+            border-radius: 50%;
+            animation: fly linear infinite;
+            opacity: 0;
+            box-shadow: 0 0 5px rgba(255,255,255,0.8);
+        }
+
+        @keyframes fly {
+            0% { transform: translate3d(0, 0, 0) scale(1); opacity: 1; }
+            100% { transform: translate3d(100vw, 100vh, 0) scale(0); opacity: 0; }
+        }
+
         /* --- КРУГ --- */
         .circle-container {
             position: relative;
             width: 240px; height: 240px;
             display: flex; align-items: center; justify-content: center;
             margin-bottom: 30px;
+            z-index: 10;
         }
 
         .circle { 
             width: 100%; height: 100%; border-radius: 50%; 
             background: radial-gradient(circle, #007bff 0%, #001a33 100%); 
-            box-shadow: 0 0 30px #007bff; 
+            box-shadow: 0 0 40px #007bff, inset 0 0 20px rgba(255,255,255,0.5); 
             transition: all 0.3s ease-in-out;
             position: relative;
-            z-index: 2;
         }
 
-        /* Кольцо вокруг круга */
+        /* Энергетическое кольцо */
         .circle::after {
             content: '';
             position: absolute;
-            top: -15px; left: -15px; right: -15px; bottom: -15px;
+            top: -20px; left: -20px; right: -20px; bottom: -20px;
             border-radius: 50%;
-            border: 2px solid rgba(255, 255, 255, 0.1);
-            border-top-color: rgba(255, 255, 255, 0.5);
-            animation: rotate 5s linear infinite;
+            border: 2px solid transparent;
+            border-top-color: #00d2ff;
+            border-bottom-color: #00d2ff;
+            animation: rotate 3s linear infinite;
+            box-shadow: 0 0 15px #00d2ff;
         }
 
         @keyframes rotate { 100% { transform: rotate(360deg); } }
@@ -63,21 +71,20 @@
         .pulsing { animation: pulse 2s infinite alternate; }
         @keyframes pulse { 
             0% { transform: scale(1); box-shadow: 0 0 20px inherit, 0 0 40px inherit; } 
-            100% { transform: scale(1.05); box-shadow: 0 0 40px inherit, 0 0 80px inherit; } 
+            100% { transform: scale(1.05); box-shadow: 0 0 50px inherit, 0 0 90px inherit; } 
         }
 
         .timer { 
             position: absolute;
             font-size: 48px; font-weight: 700; 
-            text-shadow: 0 2px 10px rgba(0,0,0,0.8);
-            z-index: 10;
+            text-shadow: 0 0 20px rgba(255,255,255,0.8);
+            z-index: 20;
         }
 
-        /* --- ТЕКСТ И КНОПКИ --- */
         .status-text { 
             font-size: 14px; color: #8b949e; margin-bottom: 20px; 
-            font-weight: 700; letter-spacing: 2px; text-transform: uppercase; 
-            text-shadow: 0 0 10px rgba(255,255,255,0.2);
+            font-weight: 700; letter-spacing: 3px; text-transform: uppercase; 
+            z-index: 10;
         }
 
         .btn { 
@@ -85,35 +92,65 @@
             background: linear-gradient(135deg, #007bff, #0056b3); 
             border: none; border-radius: 16px; margin-top: 10px; 
             cursor: pointer; display: none; font-family: 'Montserrat', sans-serif;
-            box-shadow: 0 4px 15px rgba(0, 123, 255, 0.4);
-            transition: transform 0.1s;
+            box-shadow: 0 5px 20px rgba(0, 123, 255, 0.5);
+            transition: all 0.2s;
             z-index: 10;
         }
         
         .btn:active { transform: scale(0.95); }
         .btn:disabled { opacity: 0.6; cursor: not-allowed; }
         
-        /* Кнопка "Забрать" */
         #claimBtn {
             background: linear-gradient(135deg, #238636, #1f7a30); 
-            box-shadow: 0 4px 15px rgba(35, 134, 54, 0.4);
+            box-shadow: 0 5px 20px rgba(35, 134, 54, 0.5);
         }
     </style>
 </head>
 <body>
-    <div class="status-text" id="status">Focus Mining</div>
+
+    <div id="stars-container"></div>
+
+    <div class="status-text" id="status">Warp Focus</div>
     
     <div class="circle-container">
         <div class="circle" id="circle"></div>
         <div class="timer" id="timer">0.0s</div>
     </div>
     
-    <button class="btn" id="startBtn" style="display: block;">Начать фокус</button>
+    <button class="btn" id="startBtn" style="display: block;">Начать полет</button>
     <button class="btn" id="claimBtn">Забрать SFP</button>
 
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
+        
+        // --- ГЕНЕРАЦИЯ ЗВЕЗД ---
+        const starsContainer = document.getElementById('stars-container');
+        const starCount = 50; // Количество звезд
+
+        for (let i = 0; i < starCount; i++) {
+            let star = document.createElement('div');
+            star.classList.add('star');
+            
+            // Случайный размер (от 1 до 3 пикселей)
+            let size = Math.random() * 2 + 1;
+            star.style.width = `${size}px`;
+            star.style.height = `${size}px`;
+            
+            // Случайная начальная позиция (верхний левый угол)
+            star.style.left = `${Math.random() * 100}%`;
+            star.style.top = `${Math.random() * 100}%`;
+            
+            // Случайная скорость (длительность анимации)
+            let duration = Math.random() * 2 + 0.5; // от 0.5 до 2.5 секунд
+            star.style.animationDuration = `${duration}s`;
+            
+            // Случайная задержка, чтобы звезды не летели синхронно
+            star.style.animationDelay = `${Math.random() * 2}s`;
+            
+            starsContainer.appendChild(star);
+        }
+
         let isMining = false;
         let seconds = 0;
         let timerInterval;
@@ -133,10 +170,10 @@
             };
             const theme = colors[skinName] || colors['blue'];
             circle.style.background = `radial-gradient(circle, ${theme.main} 0%, ${theme.dark} 100%)`;
-            circle.style.boxShadow = `0 0 30px ${theme.shadow}`;
+            circle.style.boxShadow = `0 0 40px ${theme.shadow}, inset 0 0 20px rgba(255,255,255,0.5)`;
             
             const styleSheet = document.styleSheets[0];
-            const keyframes = `@keyframes pulse { 0% { transform: scale(1); box-shadow: 0 0 20px ${theme.shadow}, 0 0 40px ${theme.shadow}; } 100% { transform: scale(1.05); box-shadow: 0 0 40px ${theme.shadow}, 0 0 80px ${theme.shadow}; } }`;
+            const keyframes = `@keyframes pulse { 0% { transform: scale(1); box-shadow: 0 0 20px ${theme.shadow}, 0 0 40px ${theme.shadow}; } 100% { transform: scale(1.05); box-shadow: 0 0 50px ${theme.shadow}, 0 0 90px ${theme.shadow}; } }`;
             styleSheet.insertRule(keyframes, styleSheet.cssRules.length);
         }
 
@@ -157,7 +194,7 @@
             this.style.display = 'none';
             claimBtn.style.display = 'none';
             circle.classList.add('pulsing');
-            statusText.innerText = "Удерживай фокус...";
+            statusText.innerText = "Держи фокус...";
             
             timerInterval = setInterval(() => {
                 seconds += 0.1;
@@ -170,7 +207,7 @@
             if (seconds > 0) {
                 claimBtn.disabled = true;
                 claimBtn.innerText = "Синхронизация...";
-                statusText.innerText = "Отправка на сервер...";
+                statusText.innerText = "Гиперпрыжок...";
                 
                 const chatId = tg.initDataUnsafe.user.id;
                 const url = 'https://focus-mine-bot.onrender.com/claim?user_id=' + chatId + '&seconds=' + seconds.toFixed(1);
@@ -189,8 +226,8 @@
                 isMining = false;
                 circle.classList.remove('pulsing');
                 startBtn.style.display = 'block';
-                startBtn.innerText = "Продолжить";
-                statusText.innerText = "Фокус потерян";
+                startBtn.innerText = "Продолжить полет";
+                statusText.innerText = "Связь потеряна";
             }
         });
     </script>
