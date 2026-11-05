@@ -2,6 +2,7 @@ import telebot
 import os
 import time
 import json
+import re
 from telebot import types
 from flask import Flask, request
 from flask_cors import CORS
@@ -23,7 +24,7 @@ def get_conn():
 
 def init_db():
     conn = get_conn()
-    conn.execute("CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY, balance REAL, referrer_id INTEGER, is_banned INTEGER DEFAULT 0, last_daily INTEGER DEFAULT 0, boost_end_time INTEGER DEFAULT 0, last_income_time INTEGER DEFAULT 0, skin TEXT DEFAULT 'blue')")
+    conn.execute("CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY, balance REAL, referrer_id INTEGER, is_banned INTEGER DEFAULT 0, last_daily INTEGER DEFAULT 0, boost_end_time INTEGER DEFAULT 0, last_income_time INTEGER DEFAULT 0, skin TEXT DEFAULT 'blue', nickname TEXT DEFAULT NULL)")
     try: conn.execute("ALTER TABLE users ADD COLUMN is_banned INTEGER DEFAULT 0")
     except: pass
     try: conn.execute("ALTER TABLE users ADD COLUMN last_daily INTEGER DEFAULT 0")
@@ -33,6 +34,8 @@ def init_db():
     try: conn.execute("ALTER TABLE users ADD COLUMN last_income_time INTEGER DEFAULT 0")
     except: pass
     try: conn.execute("ALTER TABLE users ADD COLUMN skin TEXT DEFAULT 'blue'")
+    except: pass
+    try: conn.execute("ALTER TABLE users ADD COLUMN nickname TEXT DEFAULT NULL")
     except: pass
     
     conn.execute("""CREATE TABLE IF NOT EXISTS withdrawals 
@@ -61,7 +64,7 @@ def add_user(user_id, referrer_id=None):
     conn = get_conn()
     cursor = conn.execute("SELECT * FROM users WHERE user_id = ?", [user_id])
     if not cursor.fetchone():
-        conn.execute("INSERT INTO users (user_id, balance, referrer_id, is_banned, last_daily, boost_end_time, last_income_time, skin) VALUES (?, ?, ?, 0, 0, 0, 0, 'blue')", [user_id, 0, referrer_id])
+        conn.execute("INSERT INTO users (user_id, balance, referrer_id, is_banned, last_daily, boost_end_time, last_income_time, skin, nickname) VALUES (?, ?, ?, 0, 0, 0, 0, 'blue', NULL)", [user_id, 0, referrer_id])
         conn.commit()
     conn.close()
 
@@ -126,10 +129,27 @@ def set_skin(user_id, skin):
     conn.commit()
     conn.close()
 
+# --- Никнеймы ---
+def get_nickname(user_id):
+    row = get_user_data(user_id)
+    return row[8] if row and row[8] else None
+
+def set_nickname(user_id, nickname):
+    conn = get_conn()
+    conn.execute("UPDATE users SET nickname = ? WHERE user_id = ?", [nickname, user_id])
+    conn.commit()
+    conn.close()
+
+def check_nickname_exists(nickname):
+    conn = get_conn()
+    cursor = conn.execute("SELECT * FROM users WHERE LOWER(nickname) = LOWER(?)", [nickname])
+    row = cursor.fetchone()
+    conn.close()
+    return row is not None
+
 def get_top_players():
     conn = get_conn()
-    # ТЕПЕРЬ БЕРЕМ И СКИН ТОЖЕ
-    cursor = conn.execute("SELECT user_id, balance, skin FROM users ORDER BY balance DESC LIMIT 10")
+    cursor = conn.execute("SELECT user_id, balance, skin, nickname FROM users ORDER BY balance DESC LIMIT 10")
     rows = cursor.fetchall()
     conn.close()
     return rows
@@ -228,10 +248,13 @@ def start(m):
     add_user(m.from_user.id, referrer_id)
     balance = get_balance(m.from_user.id)
     rank = get_rank(balance)
+    nick = get_nickname(m.from_user.id)
+    display_name = nick if nick else "Игрок"
     
     text = (
         f"👋 **Добро пожаловать в FocusMine!**\n\n"
         f"Твой фокус — твой заработок. Удерживай внимание, майни SFP и приглашай друзей.\n\n"
+        f"👤 Твой ник: **{display_name}**\n"
         f"🏅 Твой ранг: {rank}\n"
         f"💰 Твой баланс: **{balance:.1f} SFP**"
     )
@@ -248,10 +271,12 @@ def callback_profile(call):
     boost_status = f"Активен (🔥 {int((boost_time - time.time()) / 60)} мин.)" if time.time() < boost_time else "❌ Не активен"
     rank = get_rank(balance)
     skin_emoji = get_skin_emoji(get_skin(user_id))
+    nick = get_nickname(user_id) or "Не задан"
     
     text = (
         f"👤 **Твой профиль** {skin_emoji}\n"
         f"➖➖➖➖➖➖➖➖➖➖\n"
+        f"👤 Ник: **{nick}**\n"
         f"🆔 ID: `{user_id}`\n"
         f"🏅 Ранг: **{rank}**\n"
         f"💰 Баланс: **{balance:.1f} SFP**\n"
@@ -259,9 +284,31 @@ def callback_profile(call):
         f"⚡️ Буст x2: {boost_status}\n"
         f"➖➖➖➖➖➖➖➖➖➖"
     )
-    markup = types.InlineKeyboardMarkup()
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    markup.add(types.InlineKeyboardButton("✏️ Изменить ник", callback_data="change_nick"))
     markup.add(types.InlineKeyboardButton("⬅️ В меню", callback_data="back_to_menu"))
     bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=markup)
+
+# --- Смена ника ---
+@bot.callback_query_handler(func=lambda call: call.data == "change_nick")
+def callback_change_nick(call):
+    msg = bot.send_message(call.message.chat.id, "✏️ Введи свой новый ник (от 3 до 15 символов, только буквы и цифры):")
+    bot.register_next_step_handler(msg, process_new_nick)
+
+def process_new_nick(m):
+    new_nick = m.text.strip()
+    user_id = m.from_user.id
+    
+    if not re.match(r"^[a-zA-Z0-9_]{3,15}$", new_nick):
+        bot.send_message(m.chat.id, "❌ Ник должен быть от 3 до 15 символов. Разрешены только английские буквы, цифры и _.")
+        return
+        
+    if check_nickname_exists(new_nick):
+        bot.send_message(m.chat.id, "❌ Этот ник уже занят. Придумай другой.")
+        return
+        
+    set_nickname(user_id, new_nick)
+    bot.send_message(m.chat.id, f"✅ Отлично! Твой новый ник: **{new_nick}**", parse_mode='Markdown', reply_markup=get_main_menu(user_id))
 
 # --- Приглашение ---
 @bot.callback_query_handler(func=lambda call: call.data == "invite")
@@ -277,7 +324,7 @@ def callback_invite(call):
     markup.add(types.InlineKeyboardButton("⬅️ В меню", callback_data="back_to_menu"))
     bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=markup)
 
-# --- Топ игроков (СО СКИНАМИ) ---
+# --- Топ игроков ---
 @bot.callback_query_handler(func=lambda call: call.data == "top")
 def callback_top(call):
     top_users = get_top_players()
@@ -287,9 +334,10 @@ def callback_top(call):
     text = "🏆 **Топ-10 игроков FocusMine**\n➖➖➖➖➖➖➖➖➖➖\n"
     medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
     for index, user in enumerate(top_users):
-        user_id, balance, skin = user[0], user[1], user[2]
+        user_id, balance, skin, nickname = user[0], user[1], user[2], user[3]
         skin_emoji = get_skin_emoji(skin)
-        name = f"{skin_emoji} ID: {user_id}"
+        display_name = nickname if nickname else f"ID: {user_id}"
+        name = f"{skin_emoji} {display_name}"
         if user_id == admin_id: name += " 👑"
         text += f"{medals[index]} {name} — **{balance:.1f} SFP**\n"
     markup = types.InlineKeyboardMarkup()
@@ -430,8 +478,9 @@ def process_withdraw_amount(m, wallet):
         payout = amount - fee
         bot.send_message(m.chat.id, f"✅ Заявка на {amount} SFP создана!\n(Комиссия 10%: {fee:.1f} SFP)\nК получению: {payout:.1f} SFP. Ожидай.")
         if admin_id:
+            nick = get_nickname(user_id) or f"ID: {user_id}"
             text = (f"🔔 **Заявка #{req_id}**\n"
-                    f"От: `{user_id}`\n"
+                    f"От: {nick} (`{user_id}`)\n"
                     f"Сумма: **{amount} SFP**\n"
                     f"К выплате (минус 10%): **{payout:.1f} SFP**\n"
                     f"Кошелек: `{wallet}`")
