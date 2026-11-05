@@ -190,7 +190,7 @@ def collect_income(user_id):
 # --- Меню (КРАСИВОЕ) ---
 def get_main_menu(user_id):
     markup = types.InlineKeyboardMarkup(row_width=2)
-    web_app = types.WebAppInfo(url="https://https://lomovoi294.github.io/focus-mine-bot/game.html")
+    web_app = types.WebAppInfo(url="https://lomovoi294.github.io/focus-mine-bot/game.html")
     
     btn_mine = types.InlineKeyboardButton("🚀 Войти в Шахту", web_app=web_app)
     btn_daily = types.InlineKeyboardButton("🎁 Бонус", callback_data="daily_reward")
