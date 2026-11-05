@@ -529,4 +529,81 @@ def process_withdraw_amount(m, wallet):
         if admin_id:
             nick = get_nickname(user_id) or f"ID: {user_id}"
             text = (f"🔔 **Заявка #{req_id}**\n"
-                    f"От: {nick} (`{
+                    f"От: {nick} (`{user_id}`)\n"
+                    f"Сумма: **{amount} SFP**\n"
+                    f"К выплате (минус 10%): **{payout:.1f} SFP**\n"
+                    f"Кошелек: `{wallet}`")
+            markup = types.InlineKeyboardMarkup()
+            markup.add(types.InlineKeyboardButton("✅ Выплачено", callback_data=f"approve_{req_id}"))
+            markup.add(types.InlineKeyboardButton("❌ Отклонить", callback_data=f"reject_{req_id}"))
+            bot.send_message(admin_id, text, parse_mode='Markdown', reply_markup=markup)
+    except Exception as e:
+        print(f"Ошибка при выводе: {e}")
+        bot.send_message(m.chat.id, f"❌ Ошибка: {e}")
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("approve_") or call.data.startswith("reject_"))
+def callback_admin_action(call):
+    if call.from_user.id != admin_id: return
+    action, req_id = call.data.split("_")
+    req = get_withdrawal(int(req_id))
+    if not req or req[4] != 'pending': return
+    user_id, amount = req[1], req[2]
+    if action == "approve":
+        update_withdrawal_status(int(req_id), "approved")
+        bot.edit_message_text(f"✅ Заявка {req_id} одобрена.", call.message.chat.id, call.message.message_id)
+        bot.send_message(user_id, f"🎉 Вывод {amount} SFP одобрен!")
+    else:
+        update_balance(user_id, amount)
+        update_withdrawal_status(int(req_id), "rejected")
+        bot.edit_message_text(f"❌ Заявка {req_id} отклонена.", call.message.chat.id, call.message.message_id)
+        bot.send_message(user_id, f"⚠️ Вывод отклонен. {amount} SFP возвращены.")
+
+# --- Прием данных от сайта ---
+@app.route('/claim')
+def claim():
+    user_id = request.args.get('user_id')
+    seconds = request.args.get('seconds')
+    if user_id and seconds:
+        try:
+            user_id = int(user_id)
+            raw_points = int(float(seconds))
+            if is_user_banned(user_id): return "OK", 200
+            if 0 < raw_points <= 60:
+                is_boosted = time.time() < get_boost_end_time(user_id)
+                final_points = raw_points * 2 if is_boosted else raw_points
+                update_balance(user_id, final_points)
+                boost_text = " (x2)" if is_boosted else ""
+                bot.send_message(user_id, f"✅ Намайнил {final_points} SFP{boost_text}.\nБаланс: {get_balance(user_id):.1f} SFP")
+                referrer = get_referrer(user_id)
+                if referrer and referrer != user_id:
+                    ref_bonus = int(final_points * 0.10)
+                    if ref_bonus > 0:
+                        update_balance(referrer, ref_bonus)
+                        try: bot.send_message(referrer, f"💸 Реферал намайнил {final_points} SFP. Тебе +{ref_bonus} SFP.")
+                        except: pass
+            else:
+                ban_user(user_id)
+        except Exception as e:
+            print(f"Ошибка claim: {e}")
+    return "OK", 200
+
+@app.route('/get_skin/<int:user_id>')
+def get_user_skin_route(user_id):
+    skin = get_skin(user_id)
+    return skin, 200
+
+# --- Webhook ---
+@app.route('/' + t, methods=['POST'])
+def getMessage():
+    json_string = request.get_data().decode('utf-8')
+    update = telebot.types.Update.de_json(json_string)
+    bot.process_new_updates([update])
+    return "!", 200
+
+@app.route("/")
+def webhook():
+    bot.remove_webhook()
+    bot.set_webhook(url=f'https://focus-mine-bot.onrender.com/{t}')
+    return "Webhook установлен!", 200
+
+app.run(host="0.0.0.0", port=int(os.environ.get('PORT', 5000)))
