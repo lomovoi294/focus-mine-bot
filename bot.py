@@ -24,7 +24,7 @@ def get_conn():
 
 def init_db():
     conn = get_conn()
-    conn.execute("CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY, balance REAL, referrer_id INTEGER, is_banned INTEGER DEFAULT 0, last_daily INTEGER DEFAULT 0, boost_end_time INTEGER DEFAULT 0, last_income_time INTEGER DEFAULT 0, skin TEXT DEFAULT 'blue', nickname TEXT DEFAULT NULL, agreed INTEGER DEFAULT 0)")
+    conn.execute("CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY, balance REAL, referrer_id INTEGER, is_banned INTEGER DEFAULT 0, last_daily INTEGER DEFAULT 0, boost_end_time INTEGER DEFAULT 0, last_income_time INTEGER DEFAULT 0, skin TEXT DEFAULT 'blue', nickname TEXT DEFAULT NULL, agreed INTEGER DEFAULT 0, last_claim_time INTEGER DEFAULT 0)")
     try: conn.execute("ALTER TABLE users ADD COLUMN is_banned INTEGER DEFAULT 0")
     except: pass
     try: conn.execute("ALTER TABLE users ADD COLUMN last_daily INTEGER DEFAULT 0")
@@ -37,7 +37,9 @@ def init_db():
     except: pass
     try: conn.execute("ALTER TABLE users ADD COLUMN nickname TEXT DEFAULT NULL")
     except: pass
-    try: conn.execute("ALTER TABLE users ADD COLUMN agreed INTEGER DEFAULT 0") # НОВАЯ КОЛОНКА
+    try: conn.execute("ALTER TABLE users ADD COLUMN agreed INTEGER DEFAULT 0")
+    except: pass
+    try: conn.execute("ALTER TABLE users ADD COLUMN last_claim_time INTEGER DEFAULT 0") # НОВАЯ КОЛОНКА
     except: pass
     
     conn.execute("""CREATE TABLE IF NOT EXISTS withdrawals 
@@ -66,8 +68,7 @@ def add_user(user_id, referrer_id=None):
     conn = get_conn()
     cursor = conn.execute("SELECT * FROM users WHERE user_id = ?", [user_id])
     if not cursor.fetchone():
-        # При регистрации agreed = 0 (не согласен)
-        conn.execute("INSERT INTO users (user_id, balance, referrer_id, is_banned, last_daily, boost_end_time, last_income_time, skin, nickname, agreed) VALUES (?, ?, ?, 0, 0, 0, 0, 'blue', NULL, 0)", [user_id, 0, referrer_id])
+        conn.execute("INSERT INTO users (user_id, balance, referrer_id, is_banned, last_daily, boost_end_time, last_income_time, skin, nickname, agreed, last_claim_time) VALUES (?, ?, ?, 0, 0, 0, 0, 'blue', NULL, 0, 0)", [user_id, 0, referrer_id])
         conn.commit()
     conn.close()
 
@@ -80,7 +81,7 @@ def set_agreed(user_id):
 def is_agreed(user_id):
     row = get_user_data(user_id)
     if not row: return False
-    return row[9] == 1 # Индекс колонки agreed
+    return row[9] == 1
 
 def update_balance(user_id, points):
     conn = get_conn()
@@ -159,6 +160,16 @@ def check_nickname_exists(nickname):
     row = cursor.fetchone()
     conn.close()
     return row is not None
+
+def get_last_claim_time(user_id):
+    row = get_user_data(user_id)
+    return row[10] if row else 0
+
+def set_last_claim_time(user_id, timestamp):
+    conn = get_conn()
+    conn.execute("UPDATE users SET last_claim_time = ? WHERE user_id = ?", [timestamp, user_id])
+    conn.commit()
+    conn.close()
 
 def get_top_players():
     conn = get_conn()
@@ -280,7 +291,6 @@ def start(m):
 
     add_user(m.from_user.id, referrer_id)
     
-    # ПРОВЕРКА СОГЛАШЕНИЯ
     if not is_agreed(m.from_user.id):
         text = (
             f"⚖️ **Пользовательское соглашение**\n\n"
@@ -289,13 +299,11 @@ def start(m):
             f"Нажимая кнопку «Согласен», вы подтверждаете, что ознакомились с правилами и принимаете их."
         )
         markup = types.InlineKeyboardMarkup(row_width=1)
-        # Ссылка на HTML страницу с правилами
         markup.add(types.InlineKeyboardButton("📄 Читать правила", url="https://lomovoi294.github.io/focus-mine-bot/terms.html"))
         markup.add(types.InlineKeyboardButton("✅ Согласен и продолжить", callback_data="agree_terms"))
         bot.send_message(m.chat.id, text, parse_mode='Markdown', reply_markup=markup)
         return
 
-    # Если уже согласен — показываем меню
     balance = get_balance(m.from_user.id)
     rank = get_rank(balance)
     nick = get_nickname(m.from_user.id) or "Игрок"
@@ -308,6 +316,8 @@ def start(m):
         f"💰 Твой баланс: **{balance:.1f} SFP**"
     )
     bot.send_message(m.chat.id, text, parse_mode='Markdown', reply_markup=get_main_menu(m.from_user.id))
+
+# (Все остальные функции profile, shop, top, invite, withdraw, daily остаются без изменений, они уже есть в предыдущем коде)
 
 # --- Профиль ---
 @bot.callback_query_handler(func=lambda call: call.data == "profile")
@@ -558,22 +568,41 @@ def callback_admin_action(call):
         bot.edit_message_text(f"❌ Заявка {req_id} отклонена.", call.message.chat.id, call.message.message_id)
         bot.send_message(user_id, f"⚠️ Вывод отклонен. {amount} SFP возвращены.")
 
-# --- Прием данных от сайта ---
+# --- ПРИЕМ ДАННЫХ ОТ САЙТА (С АНТИЧИТОМ) ---
 @app.route('/claim')
 def claim():
     user_id = request.args.get('user_id')
     seconds = request.args.get('seconds')
+    
     if user_id and seconds:
         try:
             user_id = int(user_id)
             raw_points = int(float(seconds))
-            if is_user_banned(user_id): return "OK", 200
+            now = int(time.time())
+            
+            if is_user_banned(user_id): 
+                return "OK", 200
+
+            # ПРОВЕРКА НА ЧАСТЫЕ ЗАПРОСЫ (Античит)
+            last_claim = get_last_claim_time(user_id)
+            if now - last_claim < 5: # Если прошло меньше 5 секунд
+                ban_user(user_id)
+                print(f"🚫 Пользователь {user_id} забанен за частые запросы!")
+                try:
+                    bot.send_message(user_id, "⛔ Ты заблокирован за подозрительную активность (слишком частые запросы).")
+                except: pass
+                return "OK", 200
+            
             if 0 < raw_points <= 60:
                 is_boosted = time.time() < get_boost_end_time(user_id)
                 final_points = raw_points * 2 if is_boosted else raw_points
+                
                 update_balance(user_id, final_points)
+                set_last_claim_time(user_id, now) # Записываем время этого запроса
+                
                 boost_text = " (x2)" if is_boosted else ""
                 bot.send_message(user_id, f"✅ Намайнил {final_points} SFP{boost_text}.\nБаланс: {get_balance(user_id):.1f} SFP")
+                
                 referrer = get_referrer(user_id)
                 if referrer and referrer != user_id:
                     ref_bonus = int(final_points * 0.10)
@@ -582,9 +611,11 @@ def claim():
                         try: bot.send_message(referrer, f"💸 Реферал намайнил {final_points} SFP. Тебе +{ref_bonus} SFP.")
                         except: pass
             else:
-                ban_user(user_id)
+                ban_user(user_id) # Бан за слишком большое число
+                
         except Exception as e:
             print(f"Ошибка claim: {e}")
+            
     return "OK", 200
 
 @app.route('/get_skin/<int:user_id>')
