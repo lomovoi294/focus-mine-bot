@@ -247,12 +247,41 @@ def get_main_menu(user_id):
     btn_withdraw = types.InlineKeyboardButton("💸 Вывод", callback_data="withdraw")
     btn_top = types.InlineKeyboardButton("🏆 Топ", callback_data="top")
     btn_invite = types.InlineKeyboardButton("🤝 Пригласить друга", callback_data="invite")
+    btn_faq = types.InlineKeyboardButton("❓ Помощь (FAQ)", callback_data="faq") # НОВАЯ КНОПКА
     
     markup.add(btn_mine)
     markup.add(btn_daily, btn_profile)
     markup.add(btn_shop, btn_withdraw)
     markup.add(btn_top, btn_invite)
+    markup.add(btn_faq) # ДОБАВЛЯЕМ В МЕНЮ
     return markup
+
+# --- FAQ (Вопросы и ответы) ---
+@bot.callback_query_handler(func=lambda call: call.data == "faq")
+def callback_faq(call):
+    text = (
+        "❓ **Часто задаваемые вопросы**\n"
+        "➖➖➖➖➖➖➖➖➖➖\n\n"
+        "**1. Как начать майнить?**\n"
+        "Нажми «🚀 Войти в Шахту», запусти фокус и удерживай внимание. Не сворачивай приложение, иначе майнинг остановится.\n\n"
+        "**2. Почему кнопка «Забрать» не нажимается?**\n"
+        "Майнинг длится ровно 60 секунд. Как только лимит закончится, кнопка появится. Больше 60 секунд сидеть на экране нельзя.\n\n"
+        "**3. Что такое SFP?**\n"
+        "Это внутренняя игровая валюта. Её нельзя купить, её можно только заработать.\n\n"
+        "**4. Как вывести SFP?**\n"
+        "Нажми «💸 Вывод», укажи TON-кошелек и сумму (мин. 50 000 SFP). Заявка обрабатывается вручную. Комиссия 10%.\n\n"
+        "**5. Как купить буст или скин?**\n"
+        "Зайди в «🛒 Магазин». Там можно купить ускоритель за SFP или за Telegram Stars, а также скины (навсегда).\n\n"
+        "**6. Почему меня забанили?**\n"
+        "Бан выдается за использование скриптов/автокликеров, накрутку баланса или частые запросы. Если ты честный игрок — напиши в поддержку.\n\n"
+        "**7. Где посмотреть реферальную ссылку?**\n"
+        "Нажми «🤝 Пригласить друга». Ты получаешь 10% от добычи каждого приглашенного друга.\n\n"
+        "**8. Что такое пассивный доход?**\n"
+        "Это бонус для ранга «Инвестор» (от 10 000 SFP). Нажми «🏦 Собрать доход» в магазине, чтобы забрать накопленное (макс. за 24 часа)."
+    )
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton("⬅️ В меню", callback_data="back_to_menu"))
+    bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=markup)
 
 # --- Обработка соглашения ---
 @bot.callback_query_handler(func=lambda call: call.data == "agree_terms")
@@ -317,6 +346,7 @@ def start(m):
     )
     bot.send_message(m.chat.id, text, parse_mode='Markdown', reply_markup=get_main_menu(m.from_user.id))
 
+# (Все остальные функции profile, shop, top, invite, withdraw, daily остаются без изменений)
 # --- Профиль ---
 @bot.callback_query_handler(func=lambda call: call.data == "profile")
 def callback_profile(call):
@@ -591,68 +621,18 @@ def callback_admin_action(call):
         bot.edit_message_text(f"❌ Заявка {req_id} отклонена.", call.message.chat.id, call.message.message_id)
         bot.send_message(user_id, f"⚠️ Вывод отклонен. {amount} SFP возвращены.")
 
-# --- ПРИЕМ ДАННЫХ ОТ САЙТА (С УМНЫМ АНТИЧИТОМ) ---
+# --- ПРИЕМ ДАННЫХ ОТ САЙТА ---
 @app.route('/claim')
 def claim():
     user_id = request.args.get('user_id')
     seconds = request.args.get('seconds')
-    
     if user_id and seconds:
         try:
             user_id = int(user_id)
             raw_points = int(float(seconds))
             now = int(time.time())
-            
-            if is_user_banned(user_id): 
-                return "OK", 200
-
-            # АНТИЧИТ: Игнорируем частые запросы (без бана)
+            if is_user_banned(user_id): return "OK", 200
             last_claim = get_last_claim_time(user_id)
             if now - last_claim < 5:
                 return "OK", 200
-            
-            if 0 < raw_points <= 60:
-                base_points = raw_points * 0.5
-                is_boosted = time.time() < get_boost_end_time(user_id)
-                final_points = base_points * 2 if is_boosted else base_points
-                
-                update_balance(user_id, final_points)
-                set_last_claim_time(user_id, now)
-                
-                boost_text = " (x2)" if is_boosted else ""
-                bot.send_message(user_id, f"✅ Намайнил {final_points:.1f} SFP{boost_text}.\nБаланс: {get_balance(user_id):.1f} SFP")
-                
-                referrer = get_referrer(user_id)
-                if referrer and referrer != user_id:
-                    ref_bonus = int(final_points * 0.10)
-                    if ref_bonus > 0:
-                        update_balance(referrer, ref_bonus)
-                        try: bot.send_message(referrer, f"💸 Реферал намайнил {final_points:.1f} SFP. Тебе +{ref_bonus} SFP.")
-                        except: pass
-            else:
-                ban_user(user_id) # Бан за слишком большое число
-                
-        except Exception as e:
-            print(f"Ошибка claim: {e}")
-            
-    return "OK", 200
-
-@app.route('/get_skin/<int:user_id>')
-def get_user_skin_route(user_id):
-    skin = get_skin(user_id)
-    return skin, 200
-
-@app.route('/' + t, methods=['POST'])
-def getMessage():
-    json_string = request.get_data().decode('utf-8')
-    update = telebot.types.Update.de_json(json_string)
-    bot.process_new_updates([update])
-    return "!", 200
-
-@app.route("/")
-def webhook():
-    bot.remove_webhook()
-    bot.set_webhook(url=f'https://focus-mine-bot.onrender.com/{t}')
-    return "Webhook установлен!", 200
-
-app.run(host="0.0.0.0", port=int(os.environ.get('PORT', 5000)))
+            if 0 < raw_points <= 
