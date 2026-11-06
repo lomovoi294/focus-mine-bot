@@ -401,7 +401,7 @@ def callback_top(call):
     markup.add(types.InlineKeyboardButton("⬅️ В меню", callback_data="back_to_menu"))
     bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=markup)
 
-# --- Магазин (С ДОБАВЛЕНИЕМ ОПЛАТЫ STARS) ---
+# --- Магазин ---
 @bot.callback_query_handler(func=lambda call: call.data == "shop")
 def callback_shop(call):
     user_id = call.from_user.id
@@ -425,7 +425,7 @@ def callback_shop(call):
     
     markup = types.InlineKeyboardMarkup(row_width=1)
     markup.add(types.InlineKeyboardButton("⚡️ Купить Буст (500 SFP)", callback_data="buy_boost"))
-    markup.add(types.InlineKeyboardButton("⭐️ Купить Буст (50 Stars)", callback_data="buy_boost_stars")) # НОВАЯ КНОПКА
+    markup.add(types.InlineKeyboardButton("⭐️ Купить Буст (50 Stars)", callback_data="buy_boost_stars"))
     
     if balance >= 10000:
         markup.add(types.InlineKeyboardButton("🏦 Собрать доход", callback_data="collect_income"))
@@ -441,34 +441,6 @@ def callback_shop(call):
     
     bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=markup)
 
-# --- ОПЛАТА STARS ---
-@bot.callback_query_handler(func=lambda call: call.data == "buy_boost_stars")
-def callback_buy_boost_stars(call):
-    prices = [types.LabeledPrice(label="Ускоритель x2 (1 час)", amount=50)] # 50 Stars
-    bot.send_invoice(
-        chat_id=call.message.chat.id,
-        title="Ускоритель x2",
-        description="Удваивает добычу SFP на 1 час!",
-        invoice_payload="boost_x2_50stars",
-        provider_token="", # Для Stars это поле должно быть пустым!
-        currency="XTR", # XTR — это код Telegram Stars
-        prices=prices
-    )
-    bot.answer_callback_query(call.id)
-
-@bot.pre_checkout_query_handler(func=lambda query: True)
-def checkout(pre_checkout_query):
-    bot.answer_pre_checkout_query(pre_checkout_query.id, ok=True)
-
-@bot.message_handler(content_types=['successful_payment'])
-def got_payment(message):
-    # Активируем буст
-    user_id = message.from_user.id
-    set_boost_end_time(user_id, int(time.time()) + 3600)
-    bot.send_message(message.chat.id, "🎉 Оплата прошла успешно! Твой буст x2 активирован на 1 час.")
-    bot.send_message(admin_id, f"💰 Пользователь {user_id} купил буст за 50 Stars!")
-
-# --- Остальные обработчики ---
 @bot.callback_query_handler(func=lambda call: call.data == "buy_boost")
 def callback_buy_boost(call):
     user_id = call.from_user.id
@@ -479,6 +451,31 @@ def callback_buy_boost(call):
         callback_shop(call)
     else:
         bot.answer_callback_query(call.id, "❌ Недостаточно SFP!", show_alert=True)
+
+@bot.callback_query_handler(func=lambda call: call.data == "buy_boost_stars")
+def callback_buy_boost_stars(call):
+    prices = [types.LabeledPrice(label="Ускоритель x2 (1 час)", amount=50)]
+    bot.send_invoice(
+        chat_id=call.message.chat.id,
+        title="Ускоритель x2",
+        description="Удваивает добычу SFP на 1 час!",
+        invoice_payload="boost_x2_50stars",
+        provider_token="",
+        currency="XTR",
+        prices=prices
+    )
+    bot.answer_callback_query(call.id)
+
+@bot.pre_checkout_query_handler(func=lambda query: True)
+def checkout(pre_checkout_query):
+    bot.answer_pre_checkout_query(pre_checkout_query.id, ok=True)
+
+@bot.message_handler(content_types=['successful_payment'])
+def got_payment(message):
+    user_id = message.from_user.id
+    set_boost_end_time(user_id, int(time.time()) + 3600)
+    bot.send_message(message.chat.id, "🎉 Оплата прошла успешно! Твой буст x2 активирован на 1 час.")
+    bot.send_message(admin_id, f"💰 Пользователь {user_id} купил буст за 50 Stars!")
 
 @bot.callback_query_handler(func=lambda call: call.data == "collect_income")
 def callback_collect_income(call):
@@ -594,29 +591,37 @@ def callback_admin_action(call):
         bot.edit_message_text(f"❌ Заявка {req_id} отклонена.", call.message.chat.id, call.message.message_id)
         bot.send_message(user_id, f"⚠️ Вывод отклонен. {amount} SFP возвращены.")
 
+# --- ПРИЕМ ДАННЫХ ОТ САЙТА (С УМНЫМ АНТИЧИТОМ) ---
 @app.route('/claim')
 def claim():
     user_id = request.args.get('user_id')
     seconds = request.args.get('seconds')
+    
     if user_id and seconds:
         try:
             user_id = int(user_id)
             raw_points = int(float(seconds))
             now = int(time.time())
-            if is_user_banned(user_id): return "OK", 200
-                        last_claim = get_last_claim_time(user_id)
+            
+            if is_user_banned(user_id): 
+                return "OK", 200
+
+            # АНТИЧИТ: Игнорируем частые запросы (без бана)
+            last_claim = get_last_claim_time(user_id)
             if now - last_claim < 5:
-                # Игнорируем частый запрос, не баня игрока
-                print(f"⚠️ Игнорируем частый запрос от {user_id}")
-                return "OK", 200S
+                return "OK", 200
+            
             if 0 < raw_points <= 60:
                 base_points = raw_points * 0.5
                 is_boosted = time.time() < get_boost_end_time(user_id)
                 final_points = base_points * 2 if is_boosted else base_points
+                
                 update_balance(user_id, final_points)
                 set_last_claim_time(user_id, now)
+                
                 boost_text = " (x2)" if is_boosted else ""
                 bot.send_message(user_id, f"✅ Намайнил {final_points:.1f} SFP{boost_text}.\nБаланс: {get_balance(user_id):.1f} SFP")
+                
                 referrer = get_referrer(user_id)
                 if referrer and referrer != user_id:
                     ref_bonus = int(final_points * 0.10)
@@ -625,9 +630,11 @@ def claim():
                         try: bot.send_message(referrer, f"💸 Реферал намайнил {final_points:.1f} SFP. Тебе +{ref_bonus} SFP.")
                         except: pass
             else:
-                ban_user(user_id)
+                ban_user(user_id) # Бан за слишком большое число
+                
         except Exception as e:
             print(f"Ошибка claim: {e}")
+            
     return "OK", 200
 
 @app.route('/get_skin/<int:user_id>')
