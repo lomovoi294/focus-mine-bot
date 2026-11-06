@@ -401,7 +401,7 @@ def callback_top(call):
     markup.add(types.InlineKeyboardButton("⬅️ В меню", callback_data="back_to_menu"))
     bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=markup)
 
-# --- Магазин ---
+# --- Магазин (С ДОБАВЛЕНИЕМ ОПЛАТЫ STARS) ---
 @bot.callback_query_handler(func=lambda call: call.data == "shop")
 def callback_shop(call):
     user_id = call.from_user.id
@@ -415,7 +415,8 @@ def callback_shop(call):
         f"🎨 Текущий скин: {get_skin_name(current_skin)}\n"
         f"➖➖➖➖➖➖➖➖➖➖\n"
         f"⚡️ **Ускоритель x2 (1 час)**\n"
-        f"Цена: 500 SFP\n\n"
+        f"За SFP: 500 SFP\n"
+        f"За Stars: 50 ⭐️\n\n"
         f"🎨 **Скины (навсегда):**\n"
         f"🔴 Красный — 2000 SFP\n"
         f"🟢 Зеленый — 2000 SFP\n"
@@ -423,7 +424,8 @@ def callback_shop(call):
     )
     
     markup = types.InlineKeyboardMarkup(row_width=1)
-    markup.add(types.InlineKeyboardButton("⚡️ Купить Буст (500)", callback_data="buy_boost"))
+    markup.add(types.InlineKeyboardButton("⚡️ Купить Буст (500 SFP)", callback_data="buy_boost"))
+    markup.add(types.InlineKeyboardButton("⭐️ Купить Буст (50 Stars)", callback_data="buy_boost_stars")) # НОВАЯ КНОПКА
     
     if balance >= 10000:
         markup.add(types.InlineKeyboardButton("🏦 Собрать доход", callback_data="collect_income"))
@@ -439,6 +441,34 @@ def callback_shop(call):
     
     bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=markup)
 
+# --- ОПЛАТА STARS ---
+@bot.callback_query_handler(func=lambda call: call.data == "buy_boost_stars")
+def callback_buy_boost_stars(call):
+    prices = [types.LabeledPrice(label="Ускоритель x2 (1 час)", amount=50)] # 50 Stars
+    bot.send_invoice(
+        chat_id=call.message.chat.id,
+        title="Ускоритель x2",
+        description="Удваивает добычу SFP на 1 час!",
+        invoice_payload="boost_x2_50stars",
+        provider_token="", # Для Stars это поле должно быть пустым!
+        currency="XTR", # XTR — это код Telegram Stars
+        prices=prices
+    )
+    bot.answer_callback_query(call.id)
+
+@bot.pre_checkout_query_handler(func=lambda query: True)
+def checkout(pre_checkout_query):
+    bot.answer_pre_checkout_query(pre_checkout_query.id, ok=True)
+
+@bot.message_handler(content_types=['successful_payment'])
+def got_payment(message):
+    # Активируем буст
+    user_id = message.from_user.id
+    set_boost_end_time(user_id, int(time.time()) + 3600)
+    bot.send_message(message.chat.id, "🎉 Оплата прошла успешно! Твой буст x2 активирован на 1 час.")
+    bot.send_message(admin_id, f"💰 Пользователь {user_id} купил буст за 50 Stars!")
+
+# --- Остальные обработчики ---
 @bot.callback_query_handler(func=lambda call: call.data == "buy_boost")
 def callback_buy_boost(call):
     user_id = call.from_user.id
@@ -493,7 +523,6 @@ def callback_back(call):
     text = f"🏠 **Главное меню**\n\n💰 Баланс: **{balance:.1f} SFP**\n🏅 Ранг: {rank}"
     bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=get_main_menu(call.from_user.id))
 
-# --- Ежедневный бонус ---
 @bot.callback_query_handler(func=lambda call: call.data == "daily_reward")
 def callback_daily(call):
     user_id = call.from_user.id
@@ -508,11 +537,10 @@ def callback_daily(call):
         rem = 86400 - (now - get_last_daily(user_id))
         bot.answer_callback_query(call.id, f"⏳ Жди еще {rem // 3600} ч. {(rem % 3600) // 60} мин.", show_alert=True)
 
-# --- Вывод ---
 @bot.callback_query_handler(func=lambda call: call.data == "withdraw")
 def callback_withdraw(call):
     user_id = call.from_user.id
-    if get_balance(user_id) < 50000: # НОВЫЙ МИНИМУМ 50 000
+    if get_balance(user_id) < 50000:
         bot.answer_callback_query(call.id, f"❌ Минимум 50 000 SFP.\nУ тебя: {get_balance(user_id):.1f}", show_alert=True)
         return
     msg = bot.send_message(call.message.chat.id, "💸 Введи адрес кошелька TON:")
@@ -526,7 +554,7 @@ def process_withdraw_amount(m, wallet):
     try:
         amount = float(m.text)
         user_id = m.from_user.id
-        if amount < 50000 or amount > get_balance(user_id): # НОВЫЙ МИНИМУМ 50 000
+        if amount < 50000 or amount > get_balance(user_id):
             bot.send_message(m.chat.id, "❌ Неверная сумма. Минимум 50 000 SFP.")
             return
         update_balance(user_id, -amount)
@@ -566,42 +594,30 @@ def callback_admin_action(call):
         bot.edit_message_text(f"❌ Заявка {req_id} отклонена.", call.message.chat.id, call.message.message_id)
         bot.send_message(user_id, f"⚠️ Вывод отклонен. {amount} SFP возвращены.")
 
-# --- ПРИЕМ ДАННЫХ ОТ САЙТА (С АНТИЧИТОМ) ---
 @app.route('/claim')
 def claim():
     user_id = request.args.get('user_id')
     seconds = request.args.get('seconds')
-    
     if user_id and seconds:
         try:
             user_id = int(user_id)
             raw_points = int(float(seconds))
             now = int(time.time())
-            
-            if is_user_banned(user_id): 
-                return "OK", 200
-
+            if is_user_banned(user_id): return "OK", 200
             last_claim = get_last_claim_time(user_id)
             if now - last_claim < 5:
                 ban_user(user_id)
-                print(f"🚫 Пользователь {user_id} забанен за частые запросы!")
-                try:
-                    bot.send_message(user_id, "⛔ Ты заблокирован за подозрительную активность (слишком частые запросы).")
+                try: bot.send_message(user_id, "⛔ Ты заблокирован за подозрительную активность.")
                 except: pass
                 return "OK", 200
-            
             if 0 < raw_points <= 60:
-                # НОВАЯ СКОРОСТЬ: 0.5 SFP за 1 секунду
                 base_points = raw_points * 0.5
                 is_boosted = time.time() < get_boost_end_time(user_id)
                 final_points = base_points * 2 if is_boosted else base_points
-                
                 update_balance(user_id, final_points)
                 set_last_claim_time(user_id, now)
-                
                 boost_text = " (x2)" if is_boosted else ""
                 bot.send_message(user_id, f"✅ Намайнил {final_points:.1f} SFP{boost_text}.\nБаланс: {get_balance(user_id):.1f} SFP")
-                
                 referrer = get_referrer(user_id)
                 if referrer and referrer != user_id:
                     ref_bonus = int(final_points * 0.10)
@@ -611,10 +627,8 @@ def claim():
                         except: pass
             else:
                 ban_user(user_id)
-                
         except Exception as e:
             print(f"Ошибка claim: {e}")
-            
     return "OK", 200
 
 @app.route('/get_skin/<int:user_id>')
@@ -622,7 +636,6 @@ def get_user_skin_route(user_id):
     skin = get_skin(user_id)
     return skin, 200
 
-# --- Webhook ---
 @app.route('/' + t, methods=['POST'])
 def getMessage():
     json_string = request.get_data().decode('utf-8')
