@@ -652,4 +652,35 @@ def claim():
                 
                 referrer = get_referrer(user_id)
                 if referrer and referrer != user_id:
-                    ref_bonus
+                    ref_bonus = int(final_points * 0.10)
+                    if ref_bonus > 0:
+                        update_balance(referrer, ref_bonus)
+                        try: bot.send_message(referrer, f"💸 Реферал намайнил {final_points:.1f} SFP. Тебе +{ref_bonus} SFP.")
+                        except: pass
+            else:
+                ban_user(user_id)
+                
+        except Exception as e:
+            print(f"Ошибка claim: {e}")
+            
+    return "OK", 200
+
+@app.route('/get_skin/<int:user_id>')
+def get_user_skin_route(user_id):
+    skin = get_skin(user_id)
+    return skin, 200
+
+@app.route('/' + t, methods=['POST'])
+def getMessage():
+    json_string = request.get_data().decode('utf-8')
+    update = telebot.types.Update.de_json(json_string)
+    bot.process_new_updates([update])
+    return "!", 200
+
+@app.route("/")
+def webhook():
+    bot.remove_webhook()
+    bot.set_webhook(url=f'https://focus-mine-bot.onrender.com/{t}')
+    return "Webhook установлен!", 200
+
+app.run(host="0.0.0.0", port=int(os.environ.get('PORT', 5000)))
