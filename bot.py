@@ -248,13 +248,13 @@ def get_main_menu(user_id):
     btn_top = types.InlineKeyboardButton("🏆 Топ", callback_data="top")
     btn_invite = types.InlineKeyboardButton("🤝 Пригласить друга", callback_data="invite")
     btn_faq = types.InlineKeyboardButton("❓ Помощь (FAQ)", callback_data="faq")
-    btn_support = types.InlineKeyboardButton("📩 Поддержка", callback_data="support") # НОВАЯ КНОПКА
+    btn_support = types.InlineKeyboardButton("📩 Поддержка", callback_data="support")
     
     markup.add(btn_mine)
     markup.add(btn_daily, btn_profile)
     markup.add(btn_shop, btn_withdraw)
     markup.add(btn_top, btn_invite)
-    markup.add(btn_faq, btn_support) # ДОБАВЛЯЕМ В МЕНЮ
+    markup.add(btn_faq, btn_support)
     return markup
 
 # --- FAQ ---
@@ -295,18 +295,43 @@ def process_support_message(m):
     nick = get_nickname(user_id) or f"ID: {user_id}"
     
     if admin_id:
-        # Пересылаем сообщение админу
+        # Отправляем админу с просьбой ответить через Reply
         admin_text = (
             f"📩 **Новое сообщение в поддержку!**\n"
             f"➖➖➖➖➖➖➖➖➖➖\n"
             f"👤 От: {nick} (`{user_id}`)\n"
             f"➖➖➖➖➖➖➖➖➖➖\n"
-            f"{m.text}"
+            f"{m.text}\n\n"
+            f"*(Чтобы ответить, нажми «Ответить» (Reply) на это сообщение и напиши текст)*"
         )
         bot.send_message(admin_id, admin_text, parse_mode='Markdown')
         bot.send_message(m.chat.id, "✅ Твой вопрос отправлен администратору. Мы свяжемся с тобой в ближайшее время!")
     else:
         bot.send_message(m.chat.id, "❌ Ошибка: Администратор не настроен.")
+
+# --- ОТВЕТ АДМИНА НА СООБЩЕНИЕ ПОДДЕРЖКИ ---
+@bot.message_handler(func=lambda message: message.from_user.id == admin_id and message.reply_to_message is not None)
+def admin_reply_to_support(message):
+    replied_msg = message.reply_to_message
+    
+    # Проверяем, что это ответ на сообщение из поддержки
+    if replied_msg.text and "Новое сообщение в поддержку!" in replied_msg.text:
+        try:
+            # Вытаскиваем ID пользователя из текста сообщения
+            match = re.search(r"`(\d+)`", replied_msg.text)
+            if match:
+                user_id = int(match.group(1))
+                
+                # Отправляем ответ игроку
+                text_to_user = f"📩 **Ответ от поддержки:**\n\n{message.text}"
+                bot.send_message(user_id, text_to_user, parse_mode='Markdown')
+                
+                # Подтверждаем админу
+                bot.send_message(admin_id, "✅ Ответ отправлен игроку.")
+            else:
+                bot.send_message(admin_id, "❌ Не удалось найти ID игрока в сообщении.")
+        except Exception as e:
+            bot.send_message(admin_id, f"❌ Ошибка при отправке ответа: {e}")
 
 # --- Обработка соглашения ---
 @bot.callback_query_handler(func=lambda call: call.data == "agree_terms")
@@ -371,7 +396,7 @@ def start(m):
     )
     bot.send_message(m.chat.id, text, parse_mode='Markdown', reply_markup=get_main_menu(m.from_user.id))
 
-# (Все остальные функции profile, shop, top, invite, withdraw, daily остаются без изменений)
+# (Остальные функции без изменений...)
 # --- Профиль ---
 @bot.callback_query_handler(func=lambda call: call.data == "profile")
 def callback_profile(call):
