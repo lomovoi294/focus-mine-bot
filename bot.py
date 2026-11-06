@@ -39,7 +39,7 @@ def init_db():
     except: pass
     try: conn.execute("ALTER TABLE users ADD COLUMN agreed INTEGER DEFAULT 0")
     except: pass
-    try: conn.execute("ALTER TABLE users ADD COLUMN last_claim_time INTEGER DEFAULT 0") # НОВАЯ КОЛОНКА
+    try: conn.execute("ALTER TABLE users ADD COLUMN last_claim_time INTEGER DEFAULT 0")
     except: pass
     
     conn.execute("""CREATE TABLE IF NOT EXISTS withdrawals 
@@ -317,8 +317,6 @@ def start(m):
     )
     bot.send_message(m.chat.id, text, parse_mode='Markdown', reply_markup=get_main_menu(m.from_user.id))
 
-# (Все остальные функции profile, shop, top, invite, withdraw, daily остаются без изменений, они уже есть в предыдущем коде)
-
 # --- Профиль ---
 @bot.callback_query_handler(func=lambda call: call.data == "profile")
 def callback_profile(call):
@@ -514,22 +512,22 @@ def callback_daily(call):
 @bot.callback_query_handler(func=lambda call: call.data == "withdraw")
 def callback_withdraw(call):
     user_id = call.from_user.id
-    if get_balance(user_id) < 1000:
-        bot.answer_callback_query(call.id, f"❌ Минимум 1000 SFP.\nУ тебя: {get_balance(user_id):.1f}", show_alert=True)
+    if get_balance(user_id) < 50000: # НОВЫЙ МИНИМУМ 50 000
+        bot.answer_callback_query(call.id, f"❌ Минимум 50 000 SFP.\nУ тебя: {get_balance(user_id):.1f}", show_alert=True)
         return
     msg = bot.send_message(call.message.chat.id, "💸 Введи адрес кошелька TON:")
     bot.register_next_step_handler(msg, process_wallet_address)
 
 def process_wallet_address(m):
-    msg = bot.send_message(m.chat.id, "Введи сумму SFP (мин. 1000):")
+    msg = bot.send_message(m.chat.id, "Введи сумму SFP (мин. 50 000):")
     bot.register_next_step_handler(msg, process_withdraw_amount, m.text.strip())
 
 def process_withdraw_amount(m, wallet):
     try:
         amount = float(m.text)
         user_id = m.from_user.id
-        if amount < 1000 or amount > get_balance(user_id):
-            bot.send_message(m.chat.id, "❌ Неверная сумма.")
+        if amount < 50000 or amount > get_balance(user_id): # НОВЫЙ МИНИМУМ 50 000
+            bot.send_message(m.chat.id, "❌ Неверная сумма. Минимум 50 000 SFP.")
             return
         update_balance(user_id, -amount)
         req_id = create_withdrawal(user_id, amount, wallet)
@@ -583,9 +581,8 @@ def claim():
             if is_user_banned(user_id): 
                 return "OK", 200
 
-            # ПРОВЕРКА НА ЧАСТЫЕ ЗАПРОСЫ (Античит)
             last_claim = get_last_claim_time(user_id)
-            if now - last_claim < 5: # Если прошло меньше 5 секунд
+            if now - last_claim < 5:
                 ban_user(user_id)
                 print(f"🚫 Пользователь {user_id} забанен за частые запросы!")
                 try:
@@ -594,24 +591,26 @@ def claim():
                 return "OK", 200
             
             if 0 < raw_points <= 60:
+                # НОВАЯ СКОРОСТЬ: 0.5 SFP за 1 секунду
+                base_points = raw_points * 0.5
                 is_boosted = time.time() < get_boost_end_time(user_id)
-                final_points = raw_points * 2 if is_boosted else raw_points
+                final_points = base_points * 2 if is_boosted else base_points
                 
                 update_balance(user_id, final_points)
-                set_last_claim_time(user_id, now) # Записываем время этого запроса
+                set_last_claim_time(user_id, now)
                 
                 boost_text = " (x2)" if is_boosted else ""
-                bot.send_message(user_id, f"✅ Намайнил {final_points} SFP{boost_text}.\nБаланс: {get_balance(user_id):.1f} SFP")
+                bot.send_message(user_id, f"✅ Намайнил {final_points:.1f} SFP{boost_text}.\nБаланс: {get_balance(user_id):.1f} SFP")
                 
                 referrer = get_referrer(user_id)
                 if referrer and referrer != user_id:
                     ref_bonus = int(final_points * 0.10)
                     if ref_bonus > 0:
                         update_balance(referrer, ref_bonus)
-                        try: bot.send_message(referrer, f"💸 Реферал намайнил {final_points} SFP. Тебе +{ref_bonus} SFP.")
+                        try: bot.send_message(referrer, f"💸 Реферал намайнил {final_points:.1f} SFP. Тебе +{ref_bonus} SFP.")
                         except: pass
             else:
-                ban_user(user_id) # Бан за слишком большое число
+                ban_user(user_id)
                 
         except Exception as e:
             print(f"Ошибка claim: {e}")
