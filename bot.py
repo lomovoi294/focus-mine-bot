@@ -248,12 +248,13 @@ def get_main_menu(user_id):
     btn_top = types.InlineKeyboardButton("🏆 Топ", callback_data="top")
     btn_invite = types.InlineKeyboardButton("🤝 Пригласить друга", callback_data="invite")
     btn_faq = types.InlineKeyboardButton("❓ Помощь (FAQ)", callback_data="faq")
+    btn_support = types.InlineKeyboardButton("📩 Поддержка", callback_data="support") # НОВАЯ КНОПКА
     
     markup.add(btn_mine)
     markup.add(btn_daily, btn_profile)
     markup.add(btn_shop, btn_withdraw)
     markup.add(btn_top, btn_invite)
-    markup.add(btn_faq)
+    markup.add(btn_faq, btn_support) # ДОБАВЛЯЕМ В МЕНЮ
     return markup
 
 # --- FAQ ---
@@ -282,6 +283,30 @@ def callback_faq(call):
     markup = types.InlineKeyboardMarkup()
     markup.add(types.InlineKeyboardButton("⬅️ В меню", callback_data="back_to_menu"))
     bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=markup)
+
+# --- ПОДДЕРЖКА (ОБРАТНАЯ СВЯЗЬ) ---
+@bot.callback_query_handler(func=lambda call: call.data == "support")
+def callback_support(call):
+    msg = bot.send_message(call.message.chat.id, "📩 **Напиши свой вопрос или предложение:**\n(Он будет отправлен администратору. Не забудь указать детали, если это баг.)", parse_mode='Markdown')
+    bot.register_next_step_handler(msg, process_support_message)
+
+def process_support_message(m):
+    user_id = m.from_user.id
+    nick = get_nickname(user_id) or f"ID: {user_id}"
+    
+    if admin_id:
+        # Пересылаем сообщение админу
+        admin_text = (
+            f"📩 **Новое сообщение в поддержку!**\n"
+            f"➖➖➖➖➖➖➖➖➖➖\n"
+            f"👤 От: {nick} (`{user_id}`)\n"
+            f"➖➖➖➖➖➖➖➖➖➖\n"
+            f"{m.text}"
+        )
+        bot.send_message(admin_id, admin_text, parse_mode='Markdown')
+        bot.send_message(m.chat.id, "✅ Твой вопрос отправлен администратору. Мы свяжемся с тобой в ближайшее время!")
+    else:
+        bot.send_message(m.chat.id, "❌ Ошибка: Администратор не настроен.")
 
 # --- Обработка соглашения ---
 @bot.callback_query_handler(func=lambda call: call.data == "agree_terms")
@@ -346,6 +371,7 @@ def start(m):
     )
     bot.send_message(m.chat.id, text, parse_mode='Markdown', reply_markup=get_main_menu(m.from_user.id))
 
+# (Все остальные функции profile, shop, top, invite, withdraw, daily остаются без изменений)
 # --- Профиль ---
 @bot.callback_query_handler(func=lambda call: call.data == "profile")
 def callback_profile(call):
