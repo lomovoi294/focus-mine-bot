@@ -173,6 +173,7 @@
             styleSheet.insertRule(keyframes, styleSheet.cssRules.length);
         }
 
+        // ЗАЩИТА ОТ ЧЕРНОГО ЭКРАНА (ЕСЛИ ОТКРЫТО НЕ В TELEGRAM)
         if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
             const userId = tg.initDataUnsafe.user.id;
             fetch('https://focus-mine-bot.onrender.com/get_skin/' + userId)
@@ -181,6 +182,9 @@
                     applySkin(skinName);
                 })
                 .catch(err => console.log('Ошибка загрузки скина:', err));
+        } else {
+            console.log("Открыто вне Telegram, используется синий скин.");
+            applySkin('blue');
         }
 
         startBtn.onclick = function() {
@@ -214,6 +218,14 @@
                 claimBtn.innerText = "Синхронизация...";
                 statusText.innerText = "Отправка на сервер...";
                 
+                // Если открыто не в ТГ, просто показываем ошибку
+                if (!tg.initDataUnsafe || !tg.initDataUnsafe.user) {
+                    alert("Ошибка: Эта страница должна быть открыта внутри Telegram!");
+                    claimBtn.disabled = false;
+                    claimBtn.innerText = "Забрать SFP";
+                    return;
+                }
+
                 const chatId = tg.initDataUnsafe.user.id;
                 const url = 'https://focus-mine-bot.onrender.com/claim?user_id=' + chatId + '&seconds=' + seconds.toFixed(1);
                 
