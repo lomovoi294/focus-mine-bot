@@ -604,12 +604,11 @@ def claim():
             raw_points = int(float(seconds))
             now = int(time.time())
             if is_user_banned(user_id): return "OK", 200
-            last_claim = get_last_claim_time(user_id)
+                        last_claim = get_last_claim_time(user_id)
             if now - last_claim < 5:
-                ban_user(user_id)
-                try: bot.send_message(user_id, "⛔ Ты заблокирован за подозрительную активность.")
-                except: pass
-                return "OK", 200
+                # Игнорируем частый запрос, не баня игрока
+                print(f"⚠️ Игнорируем частый запрос от {user_id}")
+                return "OK", 200S
             if 0 < raw_points <= 60:
                 base_points = raw_points * 0.5
                 is_boosted = time.time() < get_boost_end_time(user_id)
