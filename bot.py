@@ -247,16 +247,16 @@ def get_main_menu(user_id):
     btn_withdraw = types.InlineKeyboardButton("💸 Вывод", callback_data="withdraw")
     btn_top = types.InlineKeyboardButton("🏆 Топ", callback_data="top")
     btn_invite = types.InlineKeyboardButton("🤝 Пригласить друга", callback_data="invite")
-    btn_faq = types.InlineKeyboardButton("❓ Помощь (FAQ)", callback_data="faq") # НОВАЯ КНОПКА
+    btn_faq = types.InlineKeyboardButton("❓ Помощь (FAQ)", callback_data="faq")
     
     markup.add(btn_mine)
     markup.add(btn_daily, btn_profile)
     markup.add(btn_shop, btn_withdraw)
     markup.add(btn_top, btn_invite)
-    markup.add(btn_faq) # ДОБАВЛЯЕМ В МЕНЮ
+    markup.add(btn_faq)
     return markup
 
-# --- FAQ (Вопросы и ответы) ---
+# --- FAQ ---
 @bot.callback_query_handler(func=lambda call: call.data == "faq")
 def callback_faq(call):
     text = (
@@ -273,7 +273,7 @@ def callback_faq(call):
         "**5. Как купить буст или скин?**\n"
         "Зайди в «🛒 Магазин». Там можно купить ускоритель за SFP или за Telegram Stars, а также скины (навсегда).\n\n"
         "**6. Почему меня забанили?**\n"
-        "Бан выдается за использование скриптов/автокликеров, накрутку баланса или частые запросы. Если ты честный игрок — напиши в поддержку.\n\n"
+        "Бан выдается за использование скриптов/автокликеров, накрутку баланса или частые запросы.\n\n"
         "**7. Где посмотреть реферальную ссылку?**\n"
         "Нажми «🤝 Пригласить друга». Ты получаешь 10% от добычи каждого приглашенного друга.\n\n"
         "**8. Что такое пассивный доход?**\n"
@@ -346,7 +346,6 @@ def start(m):
     )
     bot.send_message(m.chat.id, text, parse_mode='Markdown', reply_markup=get_main_menu(m.from_user.id))
 
-# (Все остальные функции profile, shop, top, invite, withdraw, daily остаются без изменений)
 # --- Профиль ---
 @bot.callback_query_handler(func=lambda call: call.data == "profile")
 def callback_profile(call):
@@ -626,13 +625,31 @@ def callback_admin_action(call):
 def claim():
     user_id = request.args.get('user_id')
     seconds = request.args.get('seconds')
+    
     if user_id and seconds:
         try:
             user_id = int(user_id)
             raw_points = int(float(seconds))
             now = int(time.time())
-            if is_user_banned(user_id): return "OK", 200
+            
+            if is_user_banned(user_id): 
+                return "OK", 200
+
             last_claim = get_last_claim_time(user_id)
             if now - last_claim < 5:
                 return "OK", 200
-            if 0 < raw_points <= 
+            
+            if 0 < raw_points <= 60:
+                base_points = raw_points * 0.5
+                is_boosted = time.time() < get_boost_end_time(user_id)
+                final_points = base_points * 2 if is_boosted else base_points
+                
+                update_balance(user_id, final_points)
+                set_last_claim_time(user_id, now)
+                
+                boost_text = " (x2)" if is_boosted else ""
+                bot.send_message(user_id, f"✅ Намайнил {final_points:.1f} SFP{boost_text}.\nБаланс: {get_balance(user_id):.1f} SFP")
+                
+                referrer = get_referrer(user_id)
+                if referrer and referrer != user_id:
+                    ref_bonus
