@@ -259,7 +259,7 @@ def get_main_menu(user_id):
     markup.add(btn_legal)
     return markup
 
-# --- ПРАВОВАЯ ИНФОРМАЦИЯ (БЕЗ MARKDOWN) ---
+# --- ПРАВОВАЯ ИНФОРМАЦИЯ ---
 @bot.callback_query_handler(func=lambda call: call.data == "legal")
 def callback_legal(call):
     text = (
@@ -272,14 +272,13 @@ def callback_legal(call):
         "3. Риски\n"
         "Внутренняя валюта SFP не имеет гарантированной денежной стоимости. Вывод средств осуществляется по решению Администрации и может быть отклонен в случае подозрительной активности.\n\n"
         "4. Контакты\n"
-        "По всем вопросам (включая технические проблемы, жалобы и предложения) пишите в раздел «📩 Поддержка» или напрямую Администратору: @твой_ник (замени на свой).\n\n"
+        "По всем вопросам пишите в раздел «📩 Поддержка».\n\n"
         "5. Полные правила\n"
         "Полное Пользовательское соглашение доступно по кнопке ниже."
     )
     markup = types.InlineKeyboardMarkup(row_width=1)
     markup.add(types.InlineKeyboardButton("📄 Читать полное соглашение", url="https://lomovoi294.github.io/focus-mine-bot/terms.html"))
     markup.add(types.InlineKeyboardButton("⬅️ В меню", callback_data="back_to_menu"))
-    # Отправляем БЕЗ parse_mode, чтобы избежать ошибок разметки
     bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=markup)
 
 # --- FAQ ---
@@ -309,7 +308,7 @@ def callback_faq(call):
     markup.add(types.InlineKeyboardButton("⬅️ В меню", callback_data="back_to_menu"))
     bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=markup)
 
-# --- ПОДДЕРЖКА (ОБРАТНАЯ СВЯЗЬ) ---
+# --- ПОДДЕРЖКА ---
 @bot.callback_query_handler(func=lambda call: call.data == "support")
 def callback_support(call):
     msg = bot.send_message(call.message.chat.id, "📩 Напиши свой вопрос или предложение:\n(Он будет отправлен администратору. Не забудь указать детали, если это баг.)")
@@ -333,13 +332,12 @@ def process_support_message(m):
     else:
         bot.send_message(m.chat.id, "❌ Ошибка: Администратор не настроен.")
 
-# --- ОТВЕТ АДМИНА НА СООБЩЕНИЕ ПОДДЕРЖКИ ---
 @bot.message_handler(func=lambda message: message.from_user.id == admin_id and message.reply_to_message is not None)
 def admin_reply_to_support(message):
     replied_msg = message.reply_to_message
     if replied_msg.text and "Новое сообщение в поддержку!" in replied_msg.text:
         try:
-            match = re.search(r"\((\d+)\)", replied_msg.text) # Ищем ID в скобках
+            match = re.search(r"\((\d+)\)", replied_msg.text)
             if match:
                 user_id = int(match.group(1))
                 text_to_user = f"📩 Ответ от поддержки:\n\n{message.text}"
@@ -350,12 +348,12 @@ def admin_reply_to_support(message):
         except Exception as e:
             bot.send_message(admin_id, f"❌ Ошибка при отправке ответа: {e}")
 
-# --- Обработка соглашения ---
+# --- ЖЕСТКОЕ СОГЛАШЕНИЕ ---
 @bot.callback_query_handler(func=lambda call: call.data == "agree_terms")
 def callback_agree(call):
     user_id = call.from_user.id
     set_agreed(user_id)
-    bot.answer_callback_query(call.id, "✅ Согласие принято!")
+    bot.answer_callback_query(call.id, "✅ Согласие принято! Добро пожаловать.")
     
     balance = get_balance(user_id)
     rank = get_rank(balance)
@@ -370,7 +368,6 @@ def callback_agree(call):
     )
     bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=get_main_menu(user_id))
 
-# --- Команды ---
 @bot.message_handler(commands=['start'])
 def start(m):
     if is_user_banned(m.from_user.id):
@@ -387,19 +384,22 @@ def start(m):
 
     add_user(m.from_user.id, referrer_id)
     
+    # ЖЕСТКАЯ ПРОВЕРКА: если не согласен, показываем только правила
     if not is_agreed(m.from_user.id):
         text = (
-            f"⚖️ Пользовательское соглашение\n\n"
-            f"Перед началом игры, пожалуйста, ознакомьтесь с нашими правилами.\n\n"
-            f"Запрещено: использование скриптов для накрутки, создание мультиаккаунтов, мошенничество.\n\n"
-            f"Нажимая кнопку «Согласен», вы подтверждаете, что ознакомились с правилами и принимаете их."
+            f"⚖️ Добро пожаловать в FocusMine!\n\n"
+            f"Перед началом игры вы должны ознакомиться с правилами и принять на себя ответственность.\n\n"
+            f"FocusMine — это развлекательная игра. Внутренняя валюта SFP не является ценной бумагой или криптовалютой.\n\n"
+            f"Мы не гарантируем доход. Вы играете на свой страх и риск.\n\n"
+            f"Если вы согласны с этим, нажмите кнопку ниже."
         )
         markup = types.InlineKeyboardMarkup(row_width=1)
-        markup.add(types.InlineKeyboardButton("📄 Читать правила", url="https://lomovoi294.github.io/focus-mine-bot/terms.html"))
-        markup.add(types.InlineKeyboardButton("✅ Согласен и продолжить", callback_data="agree_terms"))
+        markup.add(types.InlineKeyboardButton("📄 Читать полные правила", url="https://lomovoi294.github.io/focus-mine-bot/terms.html"))
+        markup.add(types.InlineKeyboardButton("✅ Я принимаю риски и беру ответственность", callback_data="agree_terms"))
         bot.send_message(m.chat.id, text, reply_markup=markup)
         return
 
+    # Если уже согласен — показываем меню
     balance = get_balance(m.from_user.id)
     rank = get_rank(balance)
     nick = get_nickname(m.from_user.id) or "Игрок"
@@ -413,7 +413,7 @@ def start(m):
     )
     bot.send_message(m.chat.id, text, reply_markup=get_main_menu(m.from_user.id))
 
-# (Остальные функции без изменений)
+# (Остальные функции без изменений...)
 @bot.callback_query_handler(func=lambda call: call.data == "profile")
 def callback_profile(call):
     user_id = call.from_user.id
