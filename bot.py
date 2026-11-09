@@ -384,7 +384,6 @@ def start(m):
 
     add_user(m.from_user.id, referrer_id)
     
-    # ЖЕСТКАЯ ПРОВЕРКА: если не согласен, показываем только правила
     if not is_agreed(m.from_user.id):
         text = (
             f"⚖️ Добро пожаловать в FocusMine!\n\n"
@@ -399,7 +398,6 @@ def start(m):
         bot.send_message(m.chat.id, text, reply_markup=markup)
         return
 
-    # Если уже согласен — показываем меню
     balance = get_balance(m.from_user.id)
     rank = get_rank(balance)
     nick = get_nickname(m.from_user.id) or "Игрок"
@@ -413,7 +411,7 @@ def start(m):
     )
     bot.send_message(m.chat.id, text, reply_markup=get_main_menu(m.from_user.id))
 
-# (Остальные функции без изменений...)
+# (Остальные функции без изменений)
 @bot.callback_query_handler(func=lambda call: call.data == "profile")
 def callback_profile(call):
     user_id = call.from_user.id
