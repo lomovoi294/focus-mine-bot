@@ -249,69 +249,70 @@ def get_main_menu(user_id):
     btn_invite = types.InlineKeyboardButton("🤝 Пригласить друга", callback_data="invite")
     btn_faq = types.InlineKeyboardButton("❓ Помощь (FAQ)", callback_data="faq")
     btn_support = types.InlineKeyboardButton("📩 Поддержка", callback_data="support")
-    btn_legal = types.InlineKeyboardButton("⚖️ Правовая информация", callback_data="legal") # НОВАЯ КНОПКА
+    btn_legal = types.InlineKeyboardButton("⚖️ Правовая информация", callback_data="legal")
     
     markup.add(btn_mine)
     markup.add(btn_daily, btn_profile)
     markup.add(btn_shop, btn_withdraw)
     markup.add(btn_top, btn_invite)
     markup.add(btn_faq, btn_support)
-    markup.add(btn_legal) # ДОБАВЛЯЕМ В МЕНЮ
+    markup.add(btn_legal)
     return markup
 
-# --- ПРАВОВАЯ ИНФОРМАЦИЯ ---
+# --- ПРАВОВАЯ ИНФОРМАЦИЯ (БЕЗ MARKDOWN) ---
 @bot.callback_query_handler(func=lambda call: call.data == "legal")
 def callback_legal(call):
     text = (
-        "⚖️ **Правовая информация и дисклеймер**\n"
+        "⚖️ Правовая информация и дисклеймер\n"
         "➖➖➖➖➖➖➖➖➖➖\n\n"
-        "**1. Характер проекта**\n"
+        "1. Характер проекта\n"
         "FocusMine — это развлекательная игра с элементами геймификации. Внутренняя валюта SFP не является ценной бумагой, финансовым инструментом или официальной криптовалютой.\n\n"
-        "**2. Отказ от гарантий**\n"
+        "2. Отказ от гарантий\n"
         "Игра предоставляется по принципу «как есть» (as is). Администрация не гарантирует бесперебойную работу, отсутствие багов или сохранность данных.\n\n"
-        "**3. Риски**\n"
+        "3. Риски\n"
         "Внутренняя валюта SFP не имеет гарантированной денежной стоимости. Вывод средств осуществляется по решению Администрации и может быть отклонен в случае подозрительной активности.\n\n"
-        "**4. Контакты**\n"
+        "4. Контакты\n"
         "По всем вопросам (включая технические проблемы, жалобы и предложения) пишите в раздел «📩 Поддержка» или напрямую Администратору: @твой_ник (замени на свой).\n\n"
-        "**5. Полные правила**\n"
+        "5. Полные правила\n"
         "Полное Пользовательское соглашение доступно по кнопке ниже."
     )
     markup = types.InlineKeyboardMarkup(row_width=1)
     markup.add(types.InlineKeyboardButton("📄 Читать полное соглашение", url="https://lomovoi294.github.io/focus-mine-bot/terms.html"))
     markup.add(types.InlineKeyboardButton("⬅️ В меню", callback_data="back_to_menu"))
-    bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=markup)
+    # Отправляем БЕЗ parse_mode, чтобы избежать ошибок разметки
+    bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=markup)
 
 # --- FAQ ---
 @bot.callback_query_handler(func=lambda call: call.data == "faq")
 def callback_faq(call):
     text = (
-        "❓ **Часто задаваемые вопросы**\n"
+        "❓ Часто задаваемые вопросы\n"
         "➖➖➖➖➖➖➖➖➖➖\n\n"
-        "**1. Как начать майнить?**\n"
+        "1. Как начать майнить?\n"
         "Нажми «🚀 Войти в Шахту», запусти фокус и удерживай внимание. Не сворачивай приложение, иначе майнинг остановится.\n\n"
-        "**2. Почему кнопка «Забрать» не нажимается?**\n"
+        "2. Почему кнопка «Забрать» не нажимается?\n"
         "Майнинг длится ровно 60 секунд. Как только лимит закончится, кнопка появится. Больше 60 секунд сидеть на экране нельзя.\n\n"
-        "**3. Что такое SFP?**\n"
+        "3. Что такое SFP?\n"
         "Это внутренняя игровая валюта. Её нельзя купить, её можно только заработать.\n\n"
-        "**4. Как вывести SFP?**\n"
+        "4. Как вывести SFP?\n"
         "Нажми «💸 Вывод», укажи TON-кошелек и сумму (мин. 50 000 SFP). Заявка обрабатывается вручную. Комиссия 10%.\n\n"
-        "**5. Как купить буст или скин?**\n"
+        "5. Как купить буст или скин?\n"
         "Зайди в «🛒 Магазин». Там можно купить ускоритель за SFP или за Telegram Stars, а также скины (навсегда).\n\n"
-        "**6. Почему меня забанили?**\n"
+        "6. Почему меня забанили?\n"
         "Бан выдается за использование скриптов/автокликеров, накрутку баланса или частые запросы.\n\n"
-        "**7. Где посмотреть реферальную ссылку?**\n"
+        "7. Где посмотреть реферальную ссылку?\n"
         "Нажми «🤝 Пригласить друга». Ты получаешь 10% от добычи каждого приглашенного друга.\n\n"
-        "**8. Что такое пассивный доход?**\n"
+        "8. Что такое пассивный доход?\n"
         "Это бонус для ранга «Инвестор» (от 10 000 SFP). Нажми «🏦 Собрать доход» в магазине, чтобы забрать накопленное (макс. за 24 часа)."
     )
     markup = types.InlineKeyboardMarkup()
     markup.add(types.InlineKeyboardButton("⬅️ В меню", callback_data="back_to_menu"))
-    bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=markup)
+    bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=markup)
 
 # --- ПОДДЕРЖКА (ОБРАТНАЯ СВЯЗЬ) ---
 @bot.callback_query_handler(func=lambda call: call.data == "support")
 def callback_support(call):
-    msg = bot.send_message(call.message.chat.id, "📩 **Напиши свой вопрос или предложение:**\n(Он будет отправлен администратору. Не забудь указать детали, если это баг.)", parse_mode='Markdown')
+    msg = bot.send_message(call.message.chat.id, "📩 Напиши свой вопрос или предложение:\n(Он будет отправлен администратору. Не забудь указать детали, если это баг.)")
     bot.register_next_step_handler(msg, process_support_message)
 
 def process_support_message(m):
@@ -320,14 +321,14 @@ def process_support_message(m):
     
     if admin_id:
         admin_text = (
-            f"📩 **Новое сообщение в поддержку!**\n"
+            f"📩 Новое сообщение в поддержку!\n"
             f"➖➖➖➖➖➖➖➖➖➖\n"
-            f"👤 От: {nick} (`{user_id}`)\n"
+            f"👤 От: {nick} ({user_id})\n"
             f"➖➖➖➖➖➖➖➖➖➖\n"
             f"{m.text}\n\n"
-            f"*(Чтобы ответить, нажми «Ответить» (Reply) на это сообщение и напиши текст)*"
+            f"(Чтобы ответить, нажми «Ответить» (Reply) на это сообщение и напиши текст)"
         )
-        bot.send_message(admin_id, admin_text, parse_mode='Markdown')
+        bot.send_message(admin_id, admin_text)
         bot.send_message(m.chat.id, "✅ Твой вопрос отправлен администратору. Мы свяжемся с тобой в ближайшее время!")
     else:
         bot.send_message(m.chat.id, "❌ Ошибка: Администратор не настроен.")
@@ -338,11 +339,11 @@ def admin_reply_to_support(message):
     replied_msg = message.reply_to_message
     if replied_msg.text and "Новое сообщение в поддержку!" in replied_msg.text:
         try:
-            match = re.search(r"`(\d+)`", replied_msg.text)
+            match = re.search(r"\((\d+)\)", replied_msg.text) # Ищем ID в скобках
             if match:
                 user_id = int(match.group(1))
-                text_to_user = f"📩 **Ответ от поддержки:**\n\n{message.text}"
-                bot.send_message(user_id, text_to_user, parse_mode='Markdown')
+                text_to_user = f"📩 Ответ от поддержки:\n\n{message.text}"
+                bot.send_message(user_id, text_to_user)
                 bot.send_message(admin_id, "✅ Ответ отправлен игроку.")
             else:
                 bot.send_message(admin_id, "❌ Не удалось найти ID игрока в сообщении.")
@@ -361,13 +362,13 @@ def callback_agree(call):
     nick = get_nickname(user_id) or "Игрок"
     
     text = (
-        f"👋 **Добро пожаловать в FocusMine!**\n\n"
+        f"👋 Добро пожаловать в FocusMine!\n\n"
         f"Твой фокус — твой заработок.\n\n"
-        f"👤 Твой ник: **{nick}**\n"
+        f"👤 Твой ник: {nick}\n"
         f"🏅 Твой ранг: {rank}\n"
-        f"💰 Твой баланс: **{balance:.1f} SFP**"
+        f"💰 Твой баланс: {balance:.1f} SFP"
     )
-    bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=get_main_menu(user_id))
+    bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=get_main_menu(user_id))
 
 # --- Команды ---
 @bot.message_handler(commands=['start'])
@@ -388,7 +389,7 @@ def start(m):
     
     if not is_agreed(m.from_user.id):
         text = (
-            f"⚖️ **Пользовательское соглашение**\n\n"
+            f"⚖️ Пользовательское соглашение\n\n"
             f"Перед началом игры, пожалуйста, ознакомьтесь с нашими правилами.\n\n"
             f"Запрещено: использование скриптов для накрутки, создание мультиаккаунтов, мошенничество.\n\n"
             f"Нажимая кнопку «Согласен», вы подтверждаете, что ознакомились с правилами и принимаете их."
@@ -396,7 +397,7 @@ def start(m):
         markup = types.InlineKeyboardMarkup(row_width=1)
         markup.add(types.InlineKeyboardButton("📄 Читать правила", url="https://lomovoi294.github.io/focus-mine-bot/terms.html"))
         markup.add(types.InlineKeyboardButton("✅ Согласен и продолжить", callback_data="agree_terms"))
-        bot.send_message(m.chat.id, text, parse_mode='Markdown', reply_markup=markup)
+        bot.send_message(m.chat.id, text, reply_markup=markup)
         return
 
     balance = get_balance(m.from_user.id)
@@ -404,16 +405,15 @@ def start(m):
     nick = get_nickname(m.from_user.id) or "Игрок"
     
     text = (
-        f"👋 **Добро пожаловать в FocusMine!**\n\n"
+        f"👋 Добро пожаловать в FocusMine!\n\n"
         f"Твой фокус — твой заработок. Удерживай внимание, майни SFP и приглашай друзей.\n\n"
-        f"👤 Твой ник: **{nick}**\n"
+        f"👤 Твой ник: {nick}\n"
         f"🏅 Твой ранг: {rank}\n"
-        f"💰 Твой баланс: **{balance:.1f} SFP**"
+        f"💰 Твой баланс: {balance:.1f} SFP"
     )
-    bot.send_message(m.chat.id, text, parse_mode='Markdown', reply_markup=get_main_menu(m.from_user.id))
+    bot.send_message(m.chat.id, text, reply_markup=get_main_menu(m.from_user.id))
 
-# (Остальные функции профиля, магазина, топа, вывода и т.д. остаются без изменений...)
-# --- Профиль ---
+# (Остальные функции без изменений)
 @bot.callback_query_handler(func=lambda call: call.data == "profile")
 def callback_profile(call):
     user_id = call.from_user.id
@@ -421,28 +421,27 @@ def callback_profile(call):
     balance = get_balance(user_id)
     refs = get_referrals_count(user_id)
     boost_time = get_boost_end_time(user_id)
-    boost_status = f"Активен (🔥 {int((boost_time - time.time()) / 60)} мин.)" if time.time() < boost_time else "❌ Не активен"
+    boost_status = f"Активен ({int((boost_time - time.time()) / 60)} мин.)" if time.time() < boost_time else "Не активен"
     rank = get_rank(balance)
     skin_emoji = get_skin_emoji(get_skin(user_id))
     nick = get_nickname(user_id) or "Не задан"
     
     text = (
-        f"👤 **Твой профиль** {skin_emoji}\n"
+        f"👤 Твой профиль {skin_emoji}\n"
         f"➖➖➖➖➖➖➖➖➖➖\n"
-        f"👤 Ник: **{nick}**\n"
-        f"🆔 ID: `{user_id}`\n"
-        f"🏅 Ранг: **{rank}**\n"
-        f"💰 Баланс: **{balance:.1f} SFP**\n"
-        f"🤝 Друзей: **{refs}**\n"
+        f"👤 Ник: {nick}\n"
+        f"🆔 ID: {user_id}\n"
+        f"🏅 Ранг: {rank}\n"
+        f"💰 Баланс: {balance:.1f} SFP\n"
+        f"🤝 Друзей: {refs}\n"
         f"⚡️ Буст x2: {boost_status}\n"
         f"➖➖➖➖➖➖➖➖➖➖"
     )
     markup = types.InlineKeyboardMarkup(row_width=1)
     markup.add(types.InlineKeyboardButton("✏️ Изменить ник", callback_data="change_nick"))
     markup.add(types.InlineKeyboardButton("⬅️ В меню", callback_data="back_to_menu"))
-    bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=markup)
+    bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=markup)
 
-# --- Смена ника ---
 @bot.callback_query_handler(func=lambda call: call.data == "change_nick")
 def callback_change_nick(call):
     msg = bot.send_message(call.message.chat.id, "✏️ Введи свой новый ник (от 3 до 15 символов, только буквы и цифры):")
@@ -461,30 +460,28 @@ def process_new_nick(m):
         return
         
     set_nickname(user_id, new_nick)
-    bot.send_message(m.chat.id, f"✅ Отлично! Твой новый ник: **{new_nick}**", parse_mode='Markdown', reply_markup=get_main_menu(user_id))
+    bot.send_message(m.chat.id, f"✅ Отлично! Твой новый ник: {new_nick}", reply_markup=get_main_menu(user_id))
 
-# --- Приглашение ---
 @bot.callback_query_handler(func=lambda call: call.data == "invite")
 def callback_invite(call):
     u = bot.get_me().username
     link = f"https://t.me/{u}?start={call.from_user.id}"
     text = (
-        f"🤝 **Реферальная система**\n\n"
-        f"Приглашай друзей и получай **10%** от их добычи SFP навсегда!\n\n"
-        f"Твоя ссылка:\n`{link}`"
+        f"🤝 Реферальная система\n\n"
+        f"Приглашай друзей и получай 10% от их добычи SFP навсегда!\n\n"
+        f"Твоя ссылка:\n{link}"
     )
     markup = types.InlineKeyboardMarkup()
     markup.add(types.InlineKeyboardButton("⬅️ В меню", callback_data="back_to_menu"))
-    bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=markup)
+    bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=markup)
 
-# --- Топ игроков ---
 @bot.callback_query_handler(func=lambda call: call.data == "top")
 def callback_top(call):
     top_users = get_top_players()
     if not top_users:
         bot.answer_callback_query(call.id, "Пока нет игроков.")
         return
-    text = "🏆 **Топ-10 игроков FocusMine**\n➖➖➖➖➖➖➖➖➖➖\n"
+    text = "🏆 Топ-10 игроков FocusMine\n➖➖➖➖➖➖➖➖➖➖\n"
     medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
     for index, user in enumerate(top_users):
         user_id, balance, skin, nickname = user[0], user[1], user[2], user[3]
@@ -492,12 +489,11 @@ def callback_top(call):
         display_name = nickname if nickname else f"ID: {user_id}"
         name = f"{skin_emoji} {display_name}"
         if user_id == admin_id: name += " 👑"
-        text += f"{medals[index]} {name} — **{balance:.1f} SFP**\n"
+        text += f"{medals[index]} {name} — {balance:.1f} SFP\n"
     markup = types.InlineKeyboardMarkup()
     markup.add(types.InlineKeyboardButton("⬅️ В меню", callback_data="back_to_menu"))
-    bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=markup)
+    bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=markup)
 
-# --- Магазин ---
 @bot.callback_query_handler(func=lambda call: call.data == "shop")
 def callback_shop(call):
     user_id = call.from_user.id
@@ -505,15 +501,15 @@ def callback_shop(call):
     current_skin = get_skin(user_id)
     
     text = (
-        f"🛒 **Магазин FocusMine**\n"
+        f"🛒 Магазин FocusMine\n"
         f"➖➖➖➖➖➖➖➖➖➖\n"
-        f"💰 Баланс: **{balance:.1f} SFP**\n"
+        f"💰 Баланс: {balance:.1f} SFP\n"
         f"🎨 Текущий скин: {get_skin_name(current_skin)}\n"
         f"➖➖➖➖➖➖➖➖➖➖\n"
-        f"⚡️ **Ускоритель x2 (1 час)**\n"
+        f"⚡️ Ускоритель x2 (1 час)\n"
         f"За SFP: 500 SFP\n"
         f"За Stars: 50 ⭐️\n\n"
-        f"🎨 **Скины (навсегда):**\n"
+        f"🎨 Скины (навсегда):\n"
         f"🔴 Красный — 2000 SFP\n"
         f"🟢 Зеленый — 2000 SFP\n"
         f"🟣 Фиолетовый — 3000 SFP\n"
@@ -535,7 +531,7 @@ def callback_shop(call):
         
     markup.add(types.InlineKeyboardButton("⬅️ В меню", callback_data="back_to_menu"))
     
-    bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=markup)
+    bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=markup)
 
 @bot.callback_query_handler(func=lambda call: call.data == "buy_boost")
 def callback_buy_boost(call):
@@ -613,8 +609,8 @@ def callback_remove_skin(call):
 def callback_back(call):
     balance = get_balance(call.from_user.id)
     rank = get_rank(balance)
-    text = f"🏠 **Главное меню**\n\n💰 Баланс: **{balance:.1f} SFP**\n🏅 Ранг: {rank}"
-    bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=get_main_menu(call.from_user.id))
+    text = f"🏠 Главное меню\n\n💰 Баланс: {balance:.1f} SFP\n🏅 Ранг: {rank}"
+    bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=get_main_menu(call.from_user.id))
 
 @bot.callback_query_handler(func=lambda call: call.data == "daily_reward")
 def callback_daily(call):
@@ -657,15 +653,15 @@ def process_withdraw_amount(m, wallet):
         bot.send_message(m.chat.id, f"✅ Заявка на {amount} SFP создана!\n(Комиссия 10%: {fee:.1f} SFP)\nК получению: {payout:.1f} SFP. Ожидай.")
         if admin_id:
             nick = get_nickname(user_id) or f"ID: {user_id}"
-            text = (f"🔔 **Заявка #{req_id}**\n"
-                    f"От: {nick} (`{user_id}`)\n"
-                    f"Сумма: **{amount} SFP**\n"
-                    f"К выплате (минус 10%): **{payout:.1f} SFP**\n"
-                    f"Кошелек: `{wallet}`")
+            text = (f"🔔 Заявка #{req_id}\n"
+                    f"От: {nick} ({user_id})\n"
+                    f"Сумма: {amount} SFP\n"
+                    f"К выплате (минус 10%): {payout:.1f} SFP\n"
+                    f"Кошелек: {wallet}")
             markup = types.InlineKeyboardMarkup()
             markup.add(types.InlineKeyboardButton("✅ Выплачено", callback_data=f"approve_{req_id}"))
             markup.add(types.InlineKeyboardButton("❌ Отклонить", callback_data=f"reject_{req_id}"))
-            bot.send_message(admin_id, text, parse_mode='Markdown', reply_markup=markup)
+            bot.send_message(admin_id, text, reply_markup=markup)
     except Exception as e:
         print(f"Ошибка при выводе: {e}")
         bot.send_message(m.chat.id, f"❌ Ошибка: {e}")
