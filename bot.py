@@ -249,13 +249,37 @@ def get_main_menu(user_id):
     btn_invite = types.InlineKeyboardButton("🤝 Пригласить друга", callback_data="invite")
     btn_faq = types.InlineKeyboardButton("❓ Помощь (FAQ)", callback_data="faq")
     btn_support = types.InlineKeyboardButton("📩 Поддержка", callback_data="support")
+    btn_legal = types.InlineKeyboardButton("⚖️ Правовая информация", callback_data="legal") # НОВАЯ КНОПКА
     
     markup.add(btn_mine)
     markup.add(btn_daily, btn_profile)
     markup.add(btn_shop, btn_withdraw)
     markup.add(btn_top, btn_invite)
     markup.add(btn_faq, btn_support)
+    markup.add(btn_legal) # ДОБАВЛЯЕМ В МЕНЮ
     return markup
+
+# --- ПРАВОВАЯ ИНФОРМАЦИЯ ---
+@bot.callback_query_handler(func=lambda call: call.data == "legal")
+def callback_legal(call):
+    text = (
+        "⚖️ **Правовая информация и дисклеймер**\n"
+        "➖➖➖➖➖➖➖➖➖➖\n\n"
+        "**1. Характер проекта**\n"
+        "FocusMine — это развлекательная игра с элементами геймификации. Внутренняя валюта SFP не является ценной бумагой, финансовым инструментом или официальной криптовалютой.\n\n"
+        "**2. Отказ от гарантий**\n"
+        "Игра предоставляется по принципу «как есть» (as is). Администрация не гарантирует бесперебойную работу, отсутствие багов или сохранность данных.\n\n"
+        "**3. Риски**\n"
+        "Внутренняя валюта SFP не имеет гарантированной денежной стоимости. Вывод средств осуществляется по решению Администрации и может быть отклонен в случае подозрительной активности.\n\n"
+        "**4. Контакты**\n"
+        "По всем вопросам (включая технические проблемы, жалобы и предложения) пишите в раздел «📩 Поддержка» или напрямую Администратору: @твой_ник (замени на свой).\n\n"
+        "**5. Полные правила**\n"
+        "Полное Пользовательское соглашение доступно по кнопке ниже."
+    )
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    markup.add(types.InlineKeyboardButton("📄 Читать полное соглашение", url="https://lomovoi294.github.io/focus-mine-bot/terms.html"))
+    markup.add(types.InlineKeyboardButton("⬅️ В меню", callback_data="back_to_menu"))
+    bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=markup)
 
 # --- FAQ ---
 @bot.callback_query_handler(func=lambda call: call.data == "faq")
@@ -295,7 +319,6 @@ def process_support_message(m):
     nick = get_nickname(user_id) or f"ID: {user_id}"
     
     if admin_id:
-        # Отправляем админу с просьбой ответить через Reply
         admin_text = (
             f"📩 **Новое сообщение в поддержку!**\n"
             f"➖➖➖➖➖➖➖➖➖➖\n"
@@ -313,20 +336,13 @@ def process_support_message(m):
 @bot.message_handler(func=lambda message: message.from_user.id == admin_id and message.reply_to_message is not None)
 def admin_reply_to_support(message):
     replied_msg = message.reply_to_message
-    
-    # Проверяем, что это ответ на сообщение из поддержки
     if replied_msg.text and "Новое сообщение в поддержку!" in replied_msg.text:
         try:
-            # Вытаскиваем ID пользователя из текста сообщения
             match = re.search(r"`(\d+)`", replied_msg.text)
             if match:
                 user_id = int(match.group(1))
-                
-                # Отправляем ответ игроку
                 text_to_user = f"📩 **Ответ от поддержки:**\n\n{message.text}"
                 bot.send_message(user_id, text_to_user, parse_mode='Markdown')
-                
-                # Подтверждаем админу
                 bot.send_message(admin_id, "✅ Ответ отправлен игроку.")
             else:
                 bot.send_message(admin_id, "❌ Не удалось найти ID игрока в сообщении.")
@@ -396,7 +412,7 @@ def start(m):
     )
     bot.send_message(m.chat.id, text, parse_mode='Markdown', reply_markup=get_main_menu(m.from_user.id))
 
-# (Остальные функции без изменений...)
+# (Остальные функции профиля, магазина, топа, вывода и т.д. остаются без изменений...)
 # --- Профиль ---
 @bot.callback_query_handler(func=lambda call: call.data == "profile")
 def callback_profile(call):
