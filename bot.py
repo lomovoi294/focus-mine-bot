@@ -294,7 +294,7 @@ def callback_faq(call):
         "3. Что такое SFP?\n"
         "Это внутренняя игровая валюта. Её нельзя купить, её можно только заработать.\n\n"
         "4. Как вывести SFP?\n"
-        "Нажми «💸 Вывод», укажи TON-кошелек и сумму (мин. 50 000 SFP). Заявка обрабатывается вручную. Комиссия 10%.\n\n"
+        "Нажми «💸 Вывод», укажи TON-кошелек и сумму (мин. 10 000 SFP). Заявка обрабатывается вручную. Комиссия 10%.\n\n"
         "5. Как купить буст или скин?\n"
         "Зайди в «🛒 Магазин». Там можно купить ускоритель за SFP или за Telegram Stars, а также скины (навсегда).\n\n"
         "6. Почему меня забанили?\n"
@@ -627,22 +627,22 @@ def callback_daily(call):
 @bot.callback_query_handler(func=lambda call: call.data == "withdraw")
 def callback_withdraw(call):
     user_id = call.from_user.id
-    if get_balance(user_id) < 50000:
-        bot.answer_callback_query(call.id, f"❌ Минимум 50 000 SFP.\nУ тебя: {get_balance(user_id):.1f}", show_alert=True)
+    if get_balance(user_id) < 10000:
+        bot.answer_callback_query(call.id, f"❌ Минимум 10 000 SFP.\nУ тебя: {get_balance(user_id):.1f}", show_alert=True)
         return
     msg = bot.send_message(call.message.chat.id, "💸 Введи адрес кошелька TON:")
     bot.register_next_step_handler(msg, process_wallet_address)
 
 def process_wallet_address(m):
-    msg = bot.send_message(m.chat.id, "Введи сумму SFP (мин. 50 000):")
+    msg = bot.send_message(m.chat.id, "Введи сумму SFP (мин. 10 000):")
     bot.register_next_step_handler(msg, process_withdraw_amount, m.text.strip())
 
 def process_withdraw_amount(m, wallet):
     try:
         amount = float(m.text)
         user_id = m.from_user.id
-        if amount < 50000 or amount > get_balance(user_id):
-            bot.send_message(m.chat.id, "❌ Неверная сумма. Минимум 50 000 SFP.")
+        if amount < 10000 or amount > get_balance(user_id):
+            bot.send_message(m.chat.id, "❌ Неверная сумма. Минимум 10 000 SFP.")
             return
         update_balance(user_id, -amount)
         req_id = create_withdrawal(user_id, amount, wallet)
