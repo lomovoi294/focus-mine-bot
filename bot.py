@@ -396,7 +396,7 @@ def start(m):
         )
         markup = types.InlineKeyboardMarkup(row_width=1)
         markup.add(types.InlineKeyboardButton("📄 Читать полные правила", url="https://lomovoi294.github.io/focus-mine-bot/terms.html"))
-        markup.add(types.InlineKeyboardButton("✅ Я принимаю риски и беру ответственность", callback_data="agree_terms"))
+        markup.add(types.InlineKeyboardButton("✅ Я СОГЛАСЕН С ПРАВИЛАМИ", callback_data="agree_terms"))
         bot.send_message(m.chat.id, text, reply_markup=markup)
         return
 
