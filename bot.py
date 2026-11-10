@@ -281,7 +281,7 @@ def callback_legal(call):
     markup.add(types.InlineKeyboardButton("⬅️ В меню", callback_data="back_to_menu"))
     bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=markup)
 
-# --- FAQ (ОБНОВЛЕННЫЙ) ---
+# --- FAQ ---
 @bot.callback_query_handler(func=lambda call: call.data == "faq")
 def callback_faq(call):
     text = (
